@@ -1,0 +1,39 @@
+- name: Ensure admin group exists
+  ansible.builtin.group:
+    name: "{{ admin_user }}"
+    gid: "{{ admin_user_gid }}"
+    state: present
+
+- name: Ensure admin user exists
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    uid: "{{ admin_user_uid }}"
+    group: "{{ admin_user }}"
+    groups: "{{ admin_user_groups }}"
+    append: true
+    shell: "{{ admin_user_shell }}"
+    create_home: true
+    state: present
+
+- name: Ensure SSH directory exists
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/.ssh"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Ensure authorized SSH key is installed
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ admin_ssh_public_key }}"
+    state: present
+
+- name: Ensure admin user has sudo access
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ admin_user }}"
+    content: "{{ admin_user }} ALL=(ALL:ALL) ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"

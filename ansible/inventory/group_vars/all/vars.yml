@@ -1,3 +1,4 @@
+homelab_domain: afcasco.dev
 server_hostname: gizmo
 server_timezone: Etc/UTC
 

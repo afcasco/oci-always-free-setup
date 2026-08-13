@@ -35,12 +35,37 @@
       - "--no-owner"
       - "--no-group"
       - "--omit-dir-times"
+      - "--exclude=caddy/Caddyfile"
   become: false
 
 - name: Ensure Caddy environment file is configured
   ansible.builtin.template:
     src: caddy.env.j2
     dest: /opt/stacks/caddy/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+
+- name: Ensure Monitoring environment file is configured
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: /opt/stacks/monitoring/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+
+- name: Ensure Caddyfile is configured
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /opt/stacks/caddy/Caddyfile
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0644"
+
+- name: Ensure Portainer environment file is configured
+  ansible.builtin.template:
+    src: portainer.env.j2
+    dest: /opt/stacks/portainer/.env
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
@@ -52,11 +77,3 @@
   loop: "{{ enabled_stacks }}"
   loop_control:
     label: "{{ item }}"
-
-- name: Ensure Monitoring environment file is configured
-  ansible.builtin.template:
-    src: monitoring.env.j2
-    dest: /opt/stacks/monitoring/.env
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0600"

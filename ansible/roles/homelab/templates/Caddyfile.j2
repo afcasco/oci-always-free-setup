@@ -1,0 +1,45 @@
+{
+    metrics {
+        per_host
+    }
+}
+
+:9180 {
+    metrics /metrics
+}
+
+{{ homelab_domain }} {
+    reverse_proxy apache:80
+}
+
+www.{{ homelab_domain }} {
+    redir https://{{ homelab_domain }}{uri} permanent
+}
+
+n8n.{{ homelab_domain }} {
+    reverse_proxy n8n:5678
+}
+
+portainer.{{ homelab_domain }} {
+    reverse_proxy portainer:9000
+}
+
+status.{{ homelab_domain }} {
+    reverse_proxy uptime-kuma:3001
+}
+
+paperless.{{ homelab_domain }} {
+    reverse_proxy paperless:8000
+}
+
+pdf.{{ homelab_domain }} {
+    reverse_proxy stirling-pdf:8080
+}
+
+airflow.{{ homelab_domain }} {
+    reverse_proxy airflow-api-server:8080
+}
+
+grafana.{{ homelab_domain }} {
+    reverse_proxy grafana:3000
+}

@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
 
     environment:
-      TRUSTED_ORIGINS: portainer.afcasco.dev
+      TRUSTED_ORIGINS: "portainer.${HOMELAB_DOMAIN}"
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

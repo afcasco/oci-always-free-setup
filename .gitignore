@@ -18,6 +18,10 @@
 **/.env.*
 !**/.env.example
 
+# Generated Ansible inventories
+ansible/inventory/bootstrap.yml
+ansible/inventory/production.yml
+
 # Editor / OS junk
 .vscode/
 .idea/

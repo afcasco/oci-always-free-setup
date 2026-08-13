@@ -1,5 +1,12 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.12.0"
+
+  backend "oci" {
+    bucket    = "homelab-terraform-state"
+    namespace = "axaw5lxlnkxt"
+    key       = "oci/terraform.tfstate"
+    region    = "eu-madrid-1"
+  }
 
   required_providers {
     oci = {
@@ -8,7 +15,6 @@ terraform {
     }
   }
 }
-
 provider "oci" {
   region = var.region
 }

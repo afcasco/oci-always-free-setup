@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+
+    ports:
+      - "${BIND_IP}:80:80"
+      - "${BIND_IP}:443:443"
+      - "${BIND_IP}:443:443/udp"
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /mnt/data/docker/caddy/data:/data
+      - /mnt/data/docker/caddy/config:/config
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

@@ -1,0 +1,65 @@
+services:
+  broker:
+    image: docker.io/library/redis:8
+    container_name: paperless-redis
+    restart: unless-stopped
+
+    volumes:
+      - /mnt/data/docker/paperless/data/redis:/data
+
+  db:
+    image: docker.io/library/postgres:17
+    container_name: paperless-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+
+    volumes:
+      - /mnt/data/docker/paperless/postgres:/var/lib/postgresql/data
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+
+    depends_on:
+      - db
+      - broker
+
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: https://paperless.afcasco.dev
+      PAPERLESS_TIME_ZONE: Europe/Madrid
+
+      PAPERLESS_OCR_LANGUAGE: spa+cat+eng
+      PAPERLESS_OCR_LANGUAGES: spa cat
+
+      PAPERLESS_FILENAME_FORMAT: "{{ created_year }}/{{ correspondent }}/{{ title }}"
+      PAPERLESS_FILENAME_FORMAT_REMOVE_NONE: "true"
+
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+
+    volumes:
+      - /mnt/data/docker/paperless/data/paperless:/usr/src/paperless/data
+      - /mnt/data/docker/paperless/media:/usr/src/paperless/media
+      - /mnt/data/docker/paperless/export:/usr/src/paperless/export
+      - /mnt/data/docker/paperless/consume:/usr/src/paperless/consume
+
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    external: true

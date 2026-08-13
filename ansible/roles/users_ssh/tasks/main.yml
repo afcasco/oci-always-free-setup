@@ -28,12 +28,3 @@
     user: "{{ admin_user }}"
     key: "{{ admin_ssh_public_key }}"
     state: present
-
-- name: Ensure admin user has sudo access
-  ansible.builtin.copy:
-    dest: "/etc/sudoers.d/{{ admin_user }}"
-    content: "{{ admin_user }} ALL=(ALL:ALL) ALL\n"
-    owner: root
-    group: root
-    mode: "0440"
-    validate: "/usr/sbin/visudo -cf %s"

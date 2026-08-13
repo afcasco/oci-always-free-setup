@@ -1,0 +1,26 @@
+- Infrastructure:
+    - Portainer:
+        icon: portainer.png
+        href: https://portainer.afcasco.dev
+        description: Docker management
+
+- Applications:
+    - n8n:
+        icon: n8n.png
+        href: https://n8n.afcasco.dev
+        description: Workflows
+
+    - Website:
+        icon: mdi-web
+        href: https://afcasco.dev
+        description: Personal site
+
+    - Paperless:
+        icon: paperless-ngx.png
+        href: https://paperless.afcasco.dev
+        description: Document archive and OCR
+
+    - Stirling PDF:
+        icon: stirling-pdf.png
+        href: https://pdf.afcasco.dev
+        description: PDF tools and digital signing

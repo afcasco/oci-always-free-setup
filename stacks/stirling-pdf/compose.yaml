@@ -1,0 +1,27 @@
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: stirling-pdf
+    restart: unless-stopped
+
+    environment:
+      SECURITY_ENABLELOGIN: "true"
+      SECURITY_INITIALLOGIN_USERNAME: ${STIRLING_ADMIN_USER}
+      SECURITY_INITIALLOGIN_PASSWORD: ${STIRLING_ADMIN_PASSWORD}
+
+      SYSTEM_DEFAULTLOCALE: es-ES
+      DISABLE_ADDITIONAL_FEATURES: "false"
+
+    volumes:
+      - /mnt/data/docker/stirling-pdf/configs:/configs
+      - /mnt/data/docker/stirling-pdf/logs:/logs
+      - /mnt/data/docker/stirling-pdf/pipeline:/pipeline
+      - /mnt/data/docker/stirling-pdf/customFiles:/customFiles
+      - /mnt/data/docker/stirling-pdf/tessdata:/usr/share/tessdata
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

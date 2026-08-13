@@ -1,0 +1,15 @@
+services:
+  apache:
+    image: httpd:2.4
+    container_name: apache
+    restart: unless-stopped
+
+    volumes:
+      - ./html:/usr/local/apache2/htdocs:ro
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

@@ -34,7 +34,7 @@ variable "instance_private_ip" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key content  for the instance"
+  description = "SSH public key content for the instance"
   type        = string
 }
 

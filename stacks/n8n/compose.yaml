@@ -1,0 +1,25 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+
+    environment:
+      - N8N_HOST=n8n.afcasco.dev
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://n8n.afcasco.dev/
+      - N8N_PROXY_HOPS=1
+      - GENERIC_TIMEZONE=Europe/Madrid
+      - TZ=Europe/Madrid
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+
+    volumes:
+      - /mnt/data/docker/n8n:/home/node/.n8n
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

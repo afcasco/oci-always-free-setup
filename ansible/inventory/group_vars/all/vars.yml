@@ -1,0 +1,51 @@
+server_hostname: gizmo
+server_timezone: Etc/UTC
+
+base_packages:
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - htop
+  - jq
+  - nano
+  - rsync
+  - wget
+
+admin_user: afcasco
+admin_user_uid: 1002
+admin_user_gid: 1002
+admin_user_shell: /bin/bash
+
+admin_user_groups:
+  - sudo
+  - users
+  - docker
+
+admin_ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDaeGefakiewZ5iEqYvQ+M40HA9ZFhFkPSBbH9iXoqXZTkhCRjuOeJXSsVs4PB3GSlxhGVEynieKSn6Lg374bDjosRwwL+Gl2ra9oEnMFTHYFUIBTOJpRUL4PdN2IORFnFGzxeA1nuVbSUi5S450AhFgn3apwov6deFMkJEAxDRdGLysPPk2AmutK+UmDxIJ6yd3mLX01n4sYANeBONwkc/w5pmQCFkiluLec6C/cqc6RjIUBNzwdA7jzKfP8LeHei1a5dmuElh1xoKRKj4wB4ohI9nv6EQYODs8Ea5XODWICw+i1GIK6iwvvga9/dQFzMx/IU22Ojo0lfNZ1mV2LM3 ssh-key-2026-07-11"
+
+data_mount_path: /mnt/data
+data_filesystem_type: ext4
+data_filesystem_label: data-new
+data_mount_options: defaults,nofail
+
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+docker_users:
+  - afcasco
+
+enabled_stacks:
+  - caddy
+  - portainer
+  - uptime-kuma
+  - monitoring
+
+caddy_bind_ip: 10.0.0.137
+
+grafana_admin_user: "{{ vault_grafana_admin_user }}"
+grafana_admin_password: "{{ vault_grafana_admin_password }}"

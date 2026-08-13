@@ -1,0 +1,22 @@
+- name: Configure homelab server
+  hosts: all
+  become: true
+
+  roles:
+    - role: base
+      tags: base
+
+    - role: users_ssh
+      tags: users_ssh
+
+    - role: storage
+      tags: storage
+
+    - role: docker
+      tags: docker
+
+    - role: docker_networks
+      tags: docker_networks
+
+    - role: homelab
+      tags: homelab

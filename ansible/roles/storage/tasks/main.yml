@@ -1,0 +1,132 @@
+- name: Determine root filesystem device
+  ansible.builtin.command:
+    cmd: findmnt -n -o SOURCE /
+  register: root_device
+  changed_when: false
+  check_mode: false
+
+- name: Determine root physical disk
+  ansible.builtin.command:
+    cmd: "lsblk -n -o PKNAME {{ root_device.stdout }}"
+  register: root_disk_name
+  changed_when: false
+  check_mode: false
+
+- name: List physical disks
+  ansible.builtin.command:
+    cmd: lsblk -dn -o PATH,TYPE
+  register: physical_disks
+  changed_when: false
+  check_mode: false
+
+- name: Determine non-root disk candidates
+  ansible.builtin.set_fact:
+    data_disk_candidates: >-
+      {{
+        physical_disks.stdout_lines
+        | select('search', '\s+disk\s*$')
+        | map('regex_replace', '\s+disk\s*$', '')
+        | map('trim')
+        | reject('equalto', '/dev/' ~ (root_disk_name.stdout | trim))
+        | list
+      }}
+
+- name: Ensure exactly one non-root disk exists
+  ansible.builtin.assert:
+    that:
+      - data_disk_candidates | length == 1
+    fail_msg: >-
+      Expected exactly one non-root disk, found:
+      {{ data_disk_candidates }}
+
+- name: Set detected data disk
+  ansible.builtin.set_fact:
+    data_disk: "{{ data_disk_candidates[0] }}"
+
+- name: Check whether data disk has partitions
+  ansible.builtin.command:
+    cmd: "lsblk -n -o TYPE {{ data_disk }}"
+  register: data_disk_types
+  changed_when: false
+  check_mode: false
+
+- name: Determine whether data disk is blank
+  ansible.builtin.set_fact:
+    data_disk_is_blank: "{{ 'part' not in data_disk_types.stdout_lines }}"
+
+- name: Create GPT partition table on blank data disk
+  community.general.parted:
+    device: "{{ data_disk }}"
+    label: gpt
+    number: 1
+    state: present
+    part_start: "0%"
+    part_end: "100%"
+  when: data_disk_is_blank
+
+- name: Set data partition device
+  ansible.builtin.set_fact:
+    data_partition: >-
+      {{
+        data_disk ~
+        ('p1' if data_disk is match('.*[0-9]$') else '1')
+      }}
+
+- name: Create ext4 filesystem on new data partition
+  community.general.filesystem:
+    fstype: "{{ data_filesystem_type }}"
+    dev: "{{ data_partition }}"
+    opts: "-L {{ data_filesystem_label }}"
+  when: data_disk_is_blank
+
+- name: Inspect detected data disk
+  ansible.builtin.command:
+    cmd: "lsblk -n -o NAME,TYPE,FSTYPE,MOUNTPOINTS {{ data_disk }}"
+  register: data_disk_info
+  changed_when: false
+  check_mode: false
+
+- name: Show detected data disk
+  ansible.builtin.debug:
+    msg:
+      - "Root disk: /dev/{{ root_disk_name.stdout }}"
+      - "Data disk: {{ data_disk }}"
+      - "{{ data_disk_info.stdout_lines }}"
+
+- name: Find filesystem by label
+  ansible.builtin.command:
+    cmd: blkid -L {{ data_filesystem_label }}
+  register: data_device
+  changed_when: false
+  check_mode: false
+
+- name: Fail if data filesystem cannot be found
+  ansible.builtin.assert:
+    that:
+      - data_device.stdout | length > 0
+    fail_msg: "Could not find filesystem labelled {{ data_filesystem_label }}"
+
+- name: Read filesystem UUID
+  ansible.builtin.command:
+    cmd: blkid -s UUID -o value {{ data_device.stdout }}
+  register: data_uuid
+  changed_when: false
+  check_mode: false
+
+- name: Ensure data mount directory exists
+  ansible.builtin.file:
+    path: "{{ data_mount_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure data volume is mounted persistently by UUID
+  ansible.posix.mount:
+    path: "{{ data_mount_path }}"
+    src: "UUID={{ data_uuid.stdout }}"
+    fstype: "{{ data_filesystem_type }}"
+    opts: "{{ data_mount_options }}"
+    dump: "0"
+    passno: "2"
+    state: mounted

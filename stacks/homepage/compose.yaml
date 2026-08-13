@@ -1,0 +1,21 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: gizmo.tailb8084e.ts.net
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    volumes:
+      - ./config:/app/config
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

@@ -1,0 +1,17 @@
+- Development:
+    - GitHub:
+        - icon: github.png
+          href: https://github.com
+
+    - Snowflake:
+        - abbr: SF
+          href: https://app.snowflake.com
+
+- Infrastructure:
+    - Oracle Cloud:
+        - icon: oracle.png
+          href: https://cloud.oracle.com
+
+    - Tailscale:
+        - icon: tailscale.png
+          href: https://login.tailscale.com/admin

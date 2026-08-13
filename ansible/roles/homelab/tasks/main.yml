@@ -1,0 +1,62 @@
+- name: Ensure stacks directory exists
+  ansible.builtin.file:
+    path: /opt/stacks
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+
+- name: Synchronize stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/"
+    dest: /opt/stacks/
+    archive: true
+    delete: false
+    rsync_opts:
+      - "--exclude=.git/"
+      - "--exclude=.env"
+      - "--exclude=.env.*"
+      - "--exclude=*/data/"
+      - "--exclude=*/logs/"
+      - "--exclude=*/postgres/"
+      - "--exclude=*/cache/"
+      - "--exclude=*/heap_dumps/"
+      - "--exclude=*/backup/"
+      - "--exclude=*/__pycache__/"
+      - "--exclude=*.db"
+      - "--exclude=*.db-*"
+      - "--exclude=*.sqlite"
+      - "--exclude=*.sqlite-*"
+      - "--exclude=*.rdb"
+      - "--exclude=*.log"
+      - "--exclude=*.key"
+      - "--exclude=*.pem"
+      - "--exclude=simple_auth_manager_passwords.json"
+      - "--no-owner"
+      - "--no-group"
+      - "--omit-dir-times"
+  become: false
+
+- name: Ensure Caddy environment file is configured
+  ansible.builtin.template:
+    src: caddy.env.j2
+    dest: /opt/stacks/caddy/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+
+- name: Ensure enabled stacks are running
+  community.docker.docker_compose_v2:
+    project_src: "/opt/stacks/{{ item }}"
+    state: present
+  loop: "{{ enabled_stacks }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure Monitoring environment file is configured
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: /opt/stacks/monitoring/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"

@@ -1,0 +1,15 @@
+- name: Ensure hostname is configured
+  ansible.builtin.hostname:
+    name: "{{ server_hostname }}"
+
+- name: Ensure timezone is configured
+  community.general.timezone:
+    name: "{{ server_timezone }}"
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+

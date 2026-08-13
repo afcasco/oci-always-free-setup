@@ -1,0 +1,31 @@
+---
+title: Gizmo
+description: Personal server dashboard
+
+language: en
+theme: dark
+color: slate
+
+headerStyle: clean
+hideVersion: true
+statusStyle: dot
+
+fullWidth: true
+useEqualHeights: true
+
+layout:
+  Infrastructure:
+    style: row
+    columns: 3
+
+  Applications:
+    style: row
+    columns: 3
+
+  Links:
+    style: row
+    columns: 4
+
+providers:
+  openweathermap: openweathermapapikey
+  weatherapi: weatherapiapikey

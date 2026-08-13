@@ -16,7 +16,7 @@
     src: "{{ playbook_dir }}/../../stacks/{{ item }}/"
     dest: "/opt/stacks/{{ item }}/"
     archive: true
-    delete: false
+    delete: true
     rsync_opts: >-
       {{
         [

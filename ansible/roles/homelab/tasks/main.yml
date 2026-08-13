@@ -1,42 +1,51 @@
-- name: Ensure stacks directory exists
+- name: Ensure enabled stack directories exist
   ansible.builtin.file:
-    path: /opt/stacks
+    path: "/opt/stacks/{{ item }}"
     state: directory
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0755"
+  loop: "{{ enabled_stacks }}"
 
-- name: Synchronize stack configuration
+- name: Synchronize enabled stack configuration
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../stacks/"
-    dest: /opt/stacks/
+    src: "{{ playbook_dir }}/../../stacks/{{ item }}/"
+    dest: "/opt/stacks/{{ item }}/"
     archive: true
     delete: false
-    rsync_opts:
-      - "--exclude=.git/"
-      - "--exclude=.env"
-      - "--exclude=.env.*"
-      - "--exclude=*/data/"
-      - "--exclude=*/logs/"
-      - "--exclude=*/postgres/"
-      - "--exclude=*/cache/"
-      - "--exclude=*/heap_dumps/"
-      - "--exclude=*/backup/"
-      - "--exclude=*/__pycache__/"
-      - "--exclude=*.db"
-      - "--exclude=*.db-*"
-      - "--exclude=*.sqlite"
-      - "--exclude=*.sqlite-*"
-      - "--exclude=*.rdb"
-      - "--exclude=*.log"
-      - "--exclude=*.key"
-      - "--exclude=*.pem"
-      - "--exclude=simple_auth_manager_passwords.json"
-      - "--no-owner"
-      - "--no-group"
-      - "--omit-dir-times"
-      - "--exclude=caddy/Caddyfile"
+    rsync_opts: >-
+      {{
+        [
+          '--exclude=.git/',
+          '--exclude=.env',
+          '--exclude=.env.*',
+          '--exclude=*/data/',
+          '--exclude=*/logs/',
+          '--exclude=*/postgres/',
+          '--exclude=*/cache/',
+          '--exclude=*/heap_dumps/',
+          '--exclude=*/backup/',
+          '--exclude=*/__pycache__/',
+          '--exclude=*.db',
+          '--exclude=*.db-*',
+          '--exclude=*.sqlite',
+          '--exclude=*.sqlite-*',
+          '--exclude=*.rdb',
+          '--exclude=*.log',
+          '--exclude=*.key',
+          '--exclude=*.pem',
+          '--exclude=simple_auth_manager_passwords.json',
+          '--no-owner',
+          '--no-group',
+          '--omit-dir-times',
+          '--no-perms'
+        ]
+        + (['--exclude=Caddyfile'] if item == 'caddy' else [])
+      }}
   become: false
+  loop: "{{ enabled_stacks }}"
+  loop_control:
+    label: "{{ item }}"
 
 - name: Ensure Caddy environment file is configured
   ansible.builtin.template:
@@ -45,6 +54,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
+  when: "'caddy' in enabled_stacks"
 
 - name: Ensure Monitoring environment file is configured
   ansible.builtin.template:
@@ -53,6 +63,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
+  when: "'monitoring' in enabled_stacks"
 
 - name: Ensure Caddyfile is configured
   ansible.builtin.template:
@@ -61,6 +72,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0644"
+  when: "'caddy' in enabled_stacks"
 
 - name: Ensure Portainer environment file is configured
   ansible.builtin.template:
@@ -69,6 +81,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
+  when: "'portainer' in enabled_stacks"
 
 - name: Ensure enabled stacks are running
   community.docker.docker_compose_v2:

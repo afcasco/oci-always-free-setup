@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODE="${1:-production}"
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TF_DIR="$ROOT/terraform/oci"
+VARS_FILE="$ROOT/ansible/inventory/group_vars/all/vars.yml"
+
+PUBLIC_IP="$(terraform -chdir="$TF_DIR" output -raw instance_public_ip)"
+PRIVATE_IP="$(terraform -chdir="$TF_DIR" output -raw instance_private_ip)"
+
+readarray -t VALUES < <(
+python3 - <<PY
+import yaml
+with open("$VARS_FILE") as f:
+    data = yaml.safe_load(f)
+
+print(data["bootstrap_user"])
+print(data["admin_user"])
+print(data["server_hostname"])
+PY
+)
+
+BOOTSTRAP_USER="${VALUES[0]}"
+ADMIN_USER="${VALUES[1]}"
+SERVER_HOSTNAME="${VALUES[2]}"
+
+case "$MODE" in
+  bootstrap)
+    OUT="$ROOT/ansible/inventory/bootstrap.yml"
+    SSH_USER="$BOOTSTRAP_USER"
+    ANSIBLE_GROUP="bootstrap"
+    ;;
+  production)
+    OUT="$ROOT/ansible/inventory/production.yml"
+    SSH_USER="$ADMIN_USER"
+    ANSIBLE_GROUP="production"
+    ;;
+  *)
+    echo "Usage: $0 [bootstrap|production]"
+    exit 1
+    ;;
+esac
+
+cat > "$OUT" <<EOF
+all:
+  children:
+    ${ANSIBLE_GROUP}:
+      hosts:
+        ${SERVER_HOSTNAME}:
+          ansible_host: ${PUBLIC_IP}
+          ansible_user: ${SSH_USER}
+          caddy_bind_ip: ${PRIVATE_IP}
+EOF
+
+echo "Generated $OUT using SSH user '$SSH_USER'"

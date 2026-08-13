@@ -1,8 +1,8 @@
 all:
   children:
-    production:
+    bootstrap:
       hosts:
         gizmo:
           ansible_host: 51.170.56.211
-          ansible_user: afcasco
+          ansible_user: ubuntu
           caddy_bind_ip: 10.0.0.137

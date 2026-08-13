@@ -1,0 +1,6 @@
+- name: Bootstrap fresh homelab server
+  hosts: all
+  become: true
+
+  roles:
+    - role: users_ssh

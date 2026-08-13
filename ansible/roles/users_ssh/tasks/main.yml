@@ -1,13 +1,13 @@
 - name: Ensure admin group exists
   ansible.builtin.group:
     name: "{{ admin_user }}"
-    gid: "{{ admin_user_gid }}"
+    gid: "{{ admin_user_gid | default(omit) }}"
     state: present
 
 - name: Ensure admin user exists
   ansible.builtin.user:
     name: "{{ admin_user }}"
-    uid: "{{ admin_user_uid }}"
+    uid: "{{ admin_user_uid | default(omit) }}"
     group: "{{ admin_user }}"
     groups: "{{ admin_user_groups }}"
     append: true

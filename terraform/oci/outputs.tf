@@ -21,3 +21,7 @@ output "vcn_id" {
 output "subnet_id" {
   value = oci_core_subnet.gizmo.id
 }
+
+output "instance_name" {
+  value = var.instance_name
+}

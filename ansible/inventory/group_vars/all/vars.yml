@@ -40,6 +40,12 @@ docker_packages:
 docker_users:
   - afcasco
 
+managed_stacks:
+  - caddy
+  - portainer
+  - uptime-kuma
+  - monitoring
+
 enabled_stacks:
   - caddy
   - portainer

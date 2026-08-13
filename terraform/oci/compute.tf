@@ -1,6 +1,6 @@
 resource "oci_core_instance" "gizmo" {
   availability_domain = data.oci_identity_availability_domains.available.availability_domains[0].name
-  compartment_id      = var.tenancy_ocid
+  compartment_id      = oci_identity_compartment.infra.id
 
   display_name = var.instance_name
   shape        = var.instance_shape
@@ -42,7 +42,7 @@ resource "oci_core_instance" "gizmo" {
 }
 
 data "oci_core_vnic_attachments" "gizmo" {
-  compartment_id = var.tenancy_ocid
+  compartment_id = oci_identity_compartment.infra.id
   instance_id    = oci_core_instance.gizmo.id
 }
 

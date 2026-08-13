@@ -5,3 +5,7 @@ output "state_bucket_name" {
 output "object_storage_namespace" {
   value = data.oci_objectstorage_namespace.this.namespace
 }
+
+output "region" {
+  value = var.region
+}

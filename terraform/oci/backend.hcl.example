@@ -1,0 +1,4 @@
+bucket    = "homelab-terraform-state"
+namespace = "your-object-storage-namespace"
+key       = "oci/terraform.tfstate"
+region    = "eu-madrid-1"

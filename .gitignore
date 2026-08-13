@@ -22,6 +22,8 @@
 ansible/inventory/bootstrap.yml
 ansible/inventory/production.yml
 
+terraform/oci/backend.hcl
+
 # Editor / OS junk
 .vscode/
 .idea/

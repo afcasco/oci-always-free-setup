@@ -11,6 +11,8 @@
 **/vault.yml
 **/vault.yaml
 
+!ansible/inventory/group_vars/production/vault.yml
+
 # Docker / stack secrets
 **/.env
 **/.env.*

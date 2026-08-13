@@ -1,0 +1,23 @@
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/terraform.tfvars
+**/.terraform.lock.hcl.backup
+**/crash.log
+**/crash.*.log
+
+# Ansible secrets
+**/vault.yml
+**/vault.yaml
+
+# Docker / stack secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+*~

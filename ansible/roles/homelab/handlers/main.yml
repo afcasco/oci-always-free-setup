@@ -1,0 +1,7 @@
+- name: Recreate Caddy
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/caddy
+    state: present
+    recreate: always
+    services:
+      - caddy

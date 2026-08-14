@@ -1,3 +1,5 @@
+[English](README.md) | [Español](README.es.md)
+
 # OCI Homelab
 
 Infrastructure-as-code for an OCI homelab.
@@ -37,17 +39,17 @@ terraform/oci/terraform.tfvars
 with the required OCI and instance values, for example:
 
 ```hcl
-tenancy_ocid            = "ocid1.tenancy.oc1..example"
-region                  = "eu-madrid-1"
+tenancy_ocid             = "ocid1.tenancy.oc1..example"
+region                   = "eu-madrid-1"
 
-compartment_name        = "homelab"
-compartment_description = "Personal homelab"
+compartment_name         = "homelab"
+compartment_description  = "Personal homelab"
 
-instance_name           = "homelab"
-instance_image_ocid     = "ocid1.image.oc1.eu-madrid-1.example"
-instance_private_ip     = "10.0.0.137"
+instance_name            = "homelab"
+instance_image_ocid      = "ocid1.image.oc1.eu-madrid-1.example"
+instance_private_ip      = "10.0.0.137"
 
-ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
+ssh_public_key           = "ssh-ed25519 AAAA... oci-homelab"
 ```
 
 `terraform.tfvars` is not committed.
@@ -83,50 +85,56 @@ The state bucket is managed separately by:
 terraform/bootstrap-state/
 ```
 
-This bootstrap configuration intentionally uses local state.
+This bootstrap configuration intentionally keeps its own state locally.
 
-For a new environment, create the state bucket first:
+The main Terraform backend configuration is generated from the bootstrap outputs:
 
 ```bash
-cd terraform/bootstrap-state
-terraform init
-terraform plan
-terraform apply
+./scripts/generate-terraform-backend.sh
 ```
 
-Then provision the homelab:
+This creates the ignored file:
+
+```text
+terraform/oci/backend.hcl
+```
+
+from the state bucket name, Object Storage namespace, and region.
+
+The main Terraform configuration is then initialized with:
 
 ```bash
-cd ../oci
-terraform init
-terraform plan
-terraform apply
+terraform init -backend-config=backend.hcl
 ```
 
 ## Ansible inventory
 
-Inventories are generated from Terraform outputs and are not committed.
-
-From the repository root:
+Inventories are generated from Terraform outputs and are not committed:
 
 ```bash
 ./scripts/generate-ansible-inventory.sh bootstrap
 ./scripts/generate-ansible-inventory.sh production
 ```
 
-The two inventories serve different purposes:
-
 - `bootstrap.yml` connects as the OCI image user (`bootstrap_user`, normally `ubuntu`).
 - `production.yml` connects as the permanent `admin_user`.
 
-`server_hostname`, `bootstrap_user`, and `admin_user` are configured in `vars.yml`.
+`server_hostname`, `bootstrap_user`, and `admin_user` are configured in:
+
+```text
+ansible/inventory/group_vars/all/vars.yml
+```
 
 ## Fresh-machine deployment
 
-### 1. Provision OCI
+For a completely new environment:
+
+### 1. Create the Terraform state bucket
+
+Configure the bootstrap Terraform variables, then:
 
 ```bash
-cd terraform/oci
+cd terraform/bootstrap-state
 
 terraform init
 terraform plan
@@ -135,11 +143,47 @@ terraform apply
 cd ../..
 ```
 
-### 2. Bootstrap the administrator
+This creates the OCI Object Storage bucket used by the main Terraform configuration.
+
+### 2. Generate the main Terraform backend
+
+```bash
+./scripts/generate-terraform-backend.sh
+```
+
+This generates:
+
+```text
+terraform/oci/backend.hcl
+```
+
+from the bootstrap Terraform outputs.
+
+### 3. Provision OCI
+
+```bash
+cd terraform/oci
+
+terraform init -backend-config=backend.hcl
+terraform plan
+terraform apply
+
+cd ../..
+```
+
+This provisions the homelab compartment, networking, compute instance, reserved public IP, and persistent data volume.
+
+### 4. Bootstrap the administrator
+
+Generate an inventory that connects using the OCI image user:
 
 ```bash
 ./scripts/generate-ansible-inventory.sh bootstrap
+```
 
+Then:
+
+```bash
 cd ansible
 
 ansible-playbook \
@@ -149,13 +193,19 @@ ansible-playbook \
 
 This creates the permanent administrator, installs its SSH key, and configures passwordless sudo for automation.
 
-### 3. Configure and deploy
+### 5. Configure and deploy
+
+Generate the production inventory:
 
 ```bash
 cd ..
 
 ./scripts/generate-ansible-inventory.sh production
+```
 
+Then:
+
+```bash
 cd ansible
 
 ansible-playbook \
@@ -203,20 +253,28 @@ enabled_stacks:
 
 - `managed_stacks` defines which stacks Ansible owns.
 - `enabled_stacks` defines which managed stacks should be running.
-- Managed but disabled stacks are stopped.
+- Managed but disabled stacks are stopped and removed by Compose.
 - Stacks not listed in `managed_stacks` are left untouched.
 
-Only enabled stack configuration is synchronized to `/opt/stacks`.
+Configuration for enabled stacks is synchronized to:
 
-Persistent data is stored separately under:
+```text
+/opt/stacks/
+```
+
+The synchronized configuration is reconciled with the repository, so removed configuration files are also removed from the server. Runtime data, secrets, logs, databases, caches, and backups are excluded from synchronization.
+
+Persistent application data is stored separately under:
 
 ```text
 /mnt/data/docker/
 ```
 
-Docker image versions are pinned in the Compose files. Upgrades should be made deliberately by changing the pinned version.
+Images used by the currently enabled stacks are pinned rather than using floating `latest` tags. Other stack definitions may still use floating tags and should be pinned before being enabled.
 
 ## Check before applying
+
+Run Ansible in check mode before significant changes:
 
 ```bash
 cd ansible
@@ -231,11 +289,24 @@ ansible-playbook \
 
 A converged host should normally report no changes.
 
+Terraform can be checked with:
+
+```bash
+cd terraform/oci
+terraform plan
+```
+
+A converged environment should report:
+
+```text
+No changes. Your infrastructure matches the configuration.
+```
+
 ## Persistent resources
 
 Terraform protects the persistent data volume and reserved public IP with `prevent_destroy`.
 
-They therefore survive normal compute-instance replacement and cannot be destroyed accidentally without first changing the lifecycle configuration.
+They survive normal compute-instance replacement and cannot be destroyed without first deliberately removing the lifecycle protection.
 
 ## Network exposure
 
@@ -247,23 +318,27 @@ OCI permits inbound:
 
 Public applications should normally be exposed through Caddy rather than by publishing their application ports directly.
 
+Caddy may also route to services managed outside Ansible. Such services do not need to appear in `managed_stacks`.
+
 ## Repository boundaries
 
 **Committed:**
 
 - Terraform configuration
+- Terraform backend configuration example
 - Ansible configuration
 - encrypted Ansible Vault
 - Compose definitions
 - configuration templates
-- pinned container versions
+- helper scripts
 
 **Not committed:**
 
+- generated `terraform/oci/backend.hcl`
 - generated Ansible inventories
 - Terraform variable files
 - Terraform local state
 - SSH/API private keys
 - real `.env` files
 - application data
-- databases, logs, caches and backups
+- databases, logs, caches, and backups

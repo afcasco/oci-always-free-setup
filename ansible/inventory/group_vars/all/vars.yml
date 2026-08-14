@@ -45,17 +45,24 @@ managed_stacks:
   - portainer
   - uptime-kuma
   - monitoring
+  - authentik
 
 enabled_stacks:
   - caddy
   - portainer
   - uptime-kuma
   - monitoring
+  - authentik
 
 caddy_bind_ip: 10.0.0.137
 
 grafana_admin_user: "{{ vault_grafana_admin_user }}"
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
+
+authentik_pg_db: authentik
+authentik_pg_user: authentik
+authentik_pg_pass: "{{ vault_authentik_pg_pass }}"
+authentik_secret_key: "{{ vault_authentik_secret_key }}"
 
 persistent_directories:
   - path: /mnt/data/docker/caddy/data
@@ -96,4 +103,19 @@ persistent_directories:
   - path: /mnt/data/docker/monitoring/alertmanager
     owner: 0
     group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/authentik/postgresql
+    owner: 70
+    group: 70
+    mode: "0700"
+
+  - path: /mnt/data/docker/authentik/data
+    owner: 1000
+    group: 1000
+    mode: "0755"
+
+  - path: /mnt/data/docker/authentik/certs
+    owner: 1000
+    group: 1000
     mode: "0755"

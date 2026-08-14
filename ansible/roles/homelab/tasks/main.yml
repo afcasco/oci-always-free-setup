@@ -76,6 +76,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0644"
+  notify: Recreate Caddy
   when: "'caddy' in enabled_stacks"
 
 - name: Ensure Portainer environment file is configured
@@ -86,6 +87,16 @@
     group: "{{ admin_user }}"
     mode: "0600"
   when: "'portainer' in enabled_stacks"
+
+- name: Ensure Authentik environment file is configured
+  ansible.builtin.template:
+    src: authentik.env.j2
+    dest: /opt/stacks/authentik/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
 
 - name: Check disabled managed stack directories
   ansible.builtin.stat:

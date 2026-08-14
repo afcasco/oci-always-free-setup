@@ -43,3 +43,7 @@ airflow.{{ homelab_domain }} {
 grafana.{{ homelab_domain }} {
     reverse_proxy grafana:3000
 }
+
+auth.{{ homelab_domain }} {
+    reverse_proxy authentik-server:9000
+}

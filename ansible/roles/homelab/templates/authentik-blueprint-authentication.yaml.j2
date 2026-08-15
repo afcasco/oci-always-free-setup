@@ -1,0 +1,185 @@
+version: 1
+
+metadata:
+  name: Homelab Authentication
+
+entries:
+  - model: authentik_flows.flow
+    id: homelab-authentication-flow
+    state: present
+    identifiers:
+      slug: homelab-authentication-flow
+    attrs:
+      name: Homelab Authentication
+      title: Homelab Login
+      designation: authentication
+
+  - model: authentik_stages_password.passwordstage
+    id: homelab-authentication-password
+    state: present
+    identifiers:
+      name: homelab-authentication-password
+    attrs:
+      name: homelab-authentication-password
+      backends:
+        - authentik.core.auth.InbuiltBackend
+      allow_show_password: false
+      failed_attempts_before_cancel: 5
+
+  - model: authentik_stages_authenticator_totp.authenticatortotpstage
+    id: homelab-authentication-totp-setup
+    state: present
+    identifiers:
+      name: homelab-authentication-totp-setup
+    attrs:
+      name: homelab-authentication-totp-setup
+      digits: "6"
+
+  - model: authentik_stages_authenticator_webauthn.authenticatorwebauthnstage
+    id: homelab-authentication-webauthn-setup
+    state: present
+    identifiers:
+      name: homelab-authentication-webauthn-setup
+    attrs:
+      name: homelab-authentication-webauthn-setup
+      user_verification: preferred
+      resident_key_requirement: preferred
+
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    id: homelab-authentication-mfa
+    state: present
+    identifiers:
+      name: homelab-authentication-mfa
+    attrs:
+      name: homelab-authentication-mfa
+      device_classes:
+        - totp
+        - webauthn
+      not_configured_action: configure
+      configuration_stages:
+        - !KeyOf homelab-authentication-totp-setup
+        - !KeyOf homelab-authentication-webauthn-setup
+      webauthn_user_verification: preferred
+
+  - model: authentik_stages_identification.identificationstage
+    id: homelab-authentication-identification
+    state: present
+    identifiers:
+      name: homelab-authentication-identification
+    attrs:
+      name: homelab-authentication-identification
+      user_fields:
+        - username
+        - email
+      webauthn_stage: !KeyOf homelab-authentication-mfa
+
+  - model: authentik_stages_user_login.userloginstage
+    id: homelab-authentication-login
+    state: present
+    identifiers:
+      name: homelab-authentication-login
+    attrs:
+      name: homelab-authentication-login
+      session_duration: seconds=0
+      terminate_other_sessions: false
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: homelab-authentication-password-policy
+    state: present
+    identifiers:
+      name: homelab-authentication-password-policy
+    attrs:
+      name: homelab-authentication-password-policy
+      expression: |
+        flow_plan = request.context.get("flow_plan")
+        if not flow_plan:
+            return True
+
+        return not hasattr(
+            flow_plan.context.get("pending_user"),
+            "backend"
+        )
+
+  - model: authentik_flows.flowstagebinding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-flow
+      stage: !KeyOf homelab-authentication-identification
+      order: 10
+
+  - model: authentik_flows.flowstagebinding
+    id: homelab-authentication-password-binding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-flow
+      stage: !KeyOf homelab-authentication-password
+      order: 20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-password-binding
+      policy: !KeyOf homelab-authentication-password-policy
+      order: 10
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 30
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: homelab-authentication-mfa-policy
+    state: present
+    identifiers:
+      name: homelab-authentication-mfa-policy
+    attrs:
+      name: homelab-authentication-mfa-policy
+      expression: |
+        flow_plan = request.context.get("flow_plan")
+        if not flow_plan:
+            return True
+
+        return not (
+            flow_plan.context.get("auth_method") == "auth_webauthn_pwl"
+        )
+
+  - model: authentik_flows.flowstagebinding
+    id: homelab-authentication-mfa-binding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-flow
+      stage: !KeyOf homelab-authentication-mfa
+      order: 30
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-mfa-binding
+      policy: !KeyOf homelab-authentication-mfa-policy
+      order: 10
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 30
+
+  - model: authentik_flows.flowstagebinding
+    state: present
+    identifiers:
+      target: !KeyOf homelab-authentication-flow
+      stage: !KeyOf homelab-authentication-login
+      order: 100
+
+  - model: authentik_brands.brand
+    state: present
+    identifiers:
+      domain: authentik-default
+    attrs:
+      default: true
+      flow_authentication: !KeyOf homelab-authentication-flow

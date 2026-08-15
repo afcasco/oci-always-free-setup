@@ -2,6 +2,15 @@
   ansible.builtin.import_tasks: authentik-blueprint-dir.yml
   when: "'authentik' in enabled_stacks"
 
+- name: Ensure Authentik blueprint staging directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/.blueprint-staging
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+  when: "'authentik' in enabled_stacks"
+
 - name: Synchronize Authentik stack configuration
   ansible.posix.synchronize:
     src: "{{ playbook_dir }}/../../stacks/authentik/"
@@ -14,7 +23,9 @@
         + [
             '--exclude=blueprints/grafana.yaml',
             '--exclude=blueprints/portainer.yaml',
-            '--exclude=blueprints/users.yaml'
+            '--exclude=blueprints/users.yaml',
+            '--exclude=blueprints/authentication.yaml',
+            '--exclude=.blueprint-staging/'
           ]
       }}
   become: false
@@ -30,24 +41,145 @@
   no_log: true
   when: "'authentik' in enabled_stacks"
 
-- name: Ensure Authentik users blueprint is configured
+#
+# Users blueprint
+#
+
+- name: Render Authentik users blueprint to staging
   ansible.builtin.template:
     src: authentik-blueprint-users.yaml.j2
-    dest: /opt/stacks/authentik/blueprints/users.yaml
+    dest: /opt/stacks/authentik/.blueprint-staging/users.yaml
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
-    mode: "0600"
+    mode: "0640"
   no_log: true
   when: "'authentik' in enabled_stacks"
 
-- name: Allow Authentik worker to read users blueprint
+- name: Allow Authentik worker to read staged users blueprint
   ansible.posix.acl:
-    path: /opt/stacks/authentik/blueprints/users.yaml
+    path: /opt/stacks/authentik/.blueprint-staging/users.yaml
     entity: "1000"
     etype: user
     permissions: "r"
     state: present
   when: "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged users blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/users.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when: "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged users blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/users.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when: "'authentik' in enabled_stacks"
+
+- name: Publish Authentik users blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/users.yaml"
+    dst="/opt/stacks/authentik/blueprints/users.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/users.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_users_blueprint_publish
+  changed_when: "'changed' in authentik_users_blueprint_publish.stdout"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
+
+#
+# Homelab authentication blueprint
+#
+
+- name: Render Homelab authentication blueprint to staging
+  ansible.builtin.template:
+    src: authentik-blueprint-authentication.yaml.j2
+    dest: /opt/stacks/authentik/.blueprint-staging/authentication.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0640"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read staged authentication blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/authentication.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
+  when: "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged authentication blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/authentication.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when: "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged authentication blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/authentication.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when: "'authentik' in enabled_stacks"
+
+- name: Publish Homelab authentication blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/authentication.yaml"
+    dst="/opt/stacks/authentik/blueprints/authentication.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/authentication.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_authentication_blueprint_publish
+  changed_when: "'changed' in authentik_authentication_blueprint_publish.stdout"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
+
+#
+# Authentik stack
+#
 
 - name: Ensure Authentik stack is running
   community.docker.docker_compose_v2:

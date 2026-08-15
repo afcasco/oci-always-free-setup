@@ -26,12 +26,15 @@
     mode: "0600"
   when: "'portainer' in enabled_stacks"
 
-
 - name: Ensure Portainer stack is running
   community.docker.docker_compose_v2:
     project_src: /opt/stacks/portainer
     state: present
   when: "'portainer' in enabled_stacks"
+
+#
+# Authentik blueprint
+#
 
 - name: Ensure Authentik blueprint directory access for Portainer
   ansible.builtin.import_tasks: authentik-blueprint-dir.yml
@@ -39,21 +42,32 @@
     - "'portainer' in enabled_stacks"
     - "'authentik' in enabled_stacks"
 
-- name: Ensure Portainer Authentik blueprint is configured
-  ansible.builtin.template:
-    src: authentik-blueprint-portainer.yaml.j2
-    dest: /opt/stacks/authentik/blueprints/portainer.yaml
+- name: Ensure Authentik blueprint staging directory exists for Portainer
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/.blueprint-staging
+    state: directory
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
-    mode: "0600"
+    mode: "0700"
+  when:
+    - "'portainer' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Render Portainer Authentik blueprint to staging
+  ansible.builtin.template:
+    src: authentik-blueprint-portainer.yaml.j2
+    dest: /opt/stacks/authentik/.blueprint-staging/portainer.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0640"
   no_log: true
   when:
     - "'portainer' in enabled_stacks"
     - "'authentik' in enabled_stacks"
 
-- name: Allow Authentik worker to read Portainer blueprint
+- name: Allow Authentik worker to read staged Portainer blueprint
   ansible.posix.acl:
-    path: /opt/stacks/authentik/blueprints/portainer.yaml
+    path: /opt/stacks/authentik/.blueprint-staging/portainer.yaml
     entity: "1000"
     etype: user
     permissions: "r"
@@ -61,6 +75,61 @@
   when:
     - "'portainer' in enabled_stacks"
     - "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged Portainer blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/portainer.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when:
+    - "'portainer' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged Portainer blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/portainer.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when:
+    - "'portainer' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Publish Portainer Authentik blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/portainer.yaml"
+    dst="/opt/stacks/authentik/blueprints/portainer.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/portainer.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_portainer_blueprint_publish
+  changed_when: "'changed' in authentik_portainer_blueprint_publish.stdout"
+  no_log: true
+  when:
+    - "'portainer' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+#
+# Portainer initialization / OAuth configuration
+#
 
 - name: Wait for Portainer API
   ansible.builtin.uri:

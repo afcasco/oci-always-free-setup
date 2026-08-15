@@ -1,137 +1,146 @@
 [English](README.md) | [Español](README.es.md)
 
-# Homelab en OCI
+# OCI Homelab
 
-Infraestructura como código para un homelab alojado en OCI.
+Infraestructura como código para aprovisionar, configurar y operar un homelab Docker en Oracle Cloud Infrastructure (OCI). La infraestructura se reconstruye desde código y los datos persistentes se conservan en un volumen OCI independiente montado en `/mnt/data`.
 
-- **Terraform** aprovisiona la infraestructura de OCI.
-- **Ansible** configura el servidor y despliega los stacks de Docker Compose gestionados.
-- Los datos persistentes de las aplicaciones se almacenan en un volumen de bloques de OCI independiente, montado en `/mnt/data`.
+- **Terraform** aprovisiona red, cómputo, IP pública y almacenamiento OCI.
+- **Ansible** prepara el sistema, instala Docker y reconcilia los stacks gestionados.
+- **Docker Compose** define las aplicaciones; **Caddy** proporciona HTTPS y proxy inverso; **Authentik** ofrece autenticación centralizada.
 
-## Requisitos previos
+## Arquitectura
 
-En la máquina local:
+```text
+Internet (80/443) → Caddy → red proxy de Docker
+                              ├── Authentik ── SSO/OIDC ── Grafana y Portainer
+                              ├── Monitoring / Grafana
+                              └── Uptime Kuma
 
-- Terraform >= 1.12
-- Ansible
-- Python 3 + PyYAML
-- rsync
-- Credenciales de la API de OCI (`~/.oci/config`)
-- Clave SSH para el servidor
+Estado persistente: /mnt/data/docker → volumen de bloques OCI
+```
 
-Instalar las colecciones de Ansible necesarias:
+El ciclo de vida es: Terraform bootstrap → bucket de estado OCI → Terraform OCI → inventario bootstrap → Ansible bootstrap → inventario de producción → playbook site.
+
+## Estructura del repositorio
+
+```text
+ansible/     inventario, playbooks, roles y requirements
+stacks/      definiciones de Docker Compose
+terraform/   bootstrap-state y oci
+scripts/     generación de inventario y backend
+```
+
+El estado de ejecución queda fuera del árbol de Git.
+
+---
+
+# Requisitos previos
+
+En el equipo de despliegue se necesitan Terraform >= 1.12, Ansible, Python 3 con PyYAML, rsync, credenciales de API de OCI y una clave SSH. Las credenciales de OCI se esperan en `~/.oci/config`.
 
 ```bash
 cd ansible
+
 ansible-galaxy collection install -r requirements.yml
 ```
 
-## Configuración
+---
 
-### Terraform
+# Configuración
 
-Crear:
+## Variables de Terraform
+
+Crear los archivos no versionados:
 
 ```text
+terraform/bootstrap-state/terraform.tfvars
 terraform/oci/terraform.tfvars
 ```
 
-con los valores necesarios para OCI y la instancia. Por ejemplo:
+El archivo de bootstrap requiere `tenancy_ocid` y `region`, y puede definir `state_bucket_name`. El archivo de OCI requiere `tenancy_ocid`, `region`, `compartment_name`, `compartment_description`, `instance_name`, `instance_image_ocid` y `ssh_public_key`. Revisar los valores por defecto de red, forma de instancia y volumen antes de aplicar.
+
+Ejemplo de `terraform/oci/terraform.tfvars`:
 
 ```hcl
-tenancy_ocid             = "ocid1.tenancy.oc1..example"
-region                   = "eu-madrid-1"
-
-compartment_name         = "homelab"
-compartment_description  = "Personal homelab"
-
-instance_name            = "homelab"
-instance_image_ocid      = "ocid1.image.oc1.eu-madrid-1.example"
-instance_private_ip      = "10.0.0.137"
-
-ssh_public_key           = "ssh-ed25519 AAAA... oci-homelab"
+tenancy_ocid            = "ocid1.tenancy.oc1..example"
+region                  = "eu-madrid-1"
+compartment_name        = "homelab"
+compartment_description = "Personal homelab"
+instance_name           = "homelab"
+instance_image_ocid     = "ocid1.image.oc1.eu-madrid-1.example"
+instance_private_ip     = "10.0.0.137"
+ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
 ```
 
-`terraform.tfvars` no se versiona en Git.
+No versionar archivos reales `terraform.tfvars`.
 
-### Ansible
+## Configuración de Ansible
 
-Configuración no secreta:
+La configuración no secreta está en `ansible/inventory/group_vars/all/vars.yml`. Antes de desplegar, revisar `homelab_domain`, `server_hostname`, `bootstrap_user`, `admin_user`, `admin_ssh_public_key`, `data_filesystem_label`, `managed_stacks` y `enabled_stacks`.
 
-```text
-ansible/inventory/group_vars/all/vars.yml
-```
+## Ansible Vault
 
-Secretos de producción:
-
-```text
-ansible/inventory/group_vars/production/vault.yml
-```
-
-El Vault está cifrado y se versiona en Git. Para editarlo:
+Los secretos de producción están cifrados y versionados en `ansible/inventory/group_vars/production/vault.yml`.
 
 ```bash
 cd ansible
+
 ansible-vault edit inventory/group_vars/production/vault.yml
 ```
 
-## Estado de Terraform
+Debe contener valores no vacíos para:
 
-La configuración principal de OCI almacena su estado de forma remota en OCI Object Storage.
-
-El bucket utilizado para almacenar el estado se gestiona de forma independiente mediante:
-
-```text
-terraform/bootstrap-state/
+```yaml
+vault_grafana_admin_user: "..."
+vault_grafana_admin_password: "..."
+vault_grafana_oidc_client_secret: "..."
+vault_portainer_admin_password: "..."
+vault_portainer_oidc_client_secret: "..."
+vault_authentik_primary_user_password: "..."
+vault_authentik_pg_pass: "..."
+vault_authentik_secret_key: "..."
 ```
 
-Esta configuración de bootstrap mantiene intencionadamente su propio estado de forma local.
+Usar valores aleatorios robustos. Ansible renderiza los secretos en la configuración de ejecución; no se guardan en texto plano en Git. Las tareas que generan archivos con secretos usan `no_log: true` y las nuevas plantillas deben hacer lo mismo.
 
-La configuración del backend del Terraform principal se genera a partir de los outputs del bootstrap:
+---
+
+# Estado de Terraform
+
+El estado principal se guarda en OCI Object Storage. El bucket se gestiona por separado en `terraform/bootstrap-state/`, cuyo propio estado es local. Generar la configuración del backend principal:
 
 ```bash
 ./scripts/generate-terraform-backend.sh
 ```
 
-Esto genera el archivo ignorado por Git:
-
-```text
-terraform/oci/backend.hcl
-```
-
-utilizando el nombre del bucket, el namespace de Object Storage y la región.
-
-A continuación se inicializa la configuración principal de Terraform con:
+Genera el archivo ignorado `terraform/oci/backend.hcl`. Inicializarlo:
 
 ```bash
+cd terraform/oci
+
 terraform init -backend-config=backend.hcl
 ```
 
-## Inventario de Ansible
+---
 
-Los inventarios se generan a partir de los outputs de Terraform y no se versionan en Git:
+# Inventario de Ansible
+
+Los inventarios se generan desde outputs de Terraform y no se versionan.
 
 ```bash
 ./scripts/generate-ansible-inventory.sh bootstrap
 ./scripts/generate-ansible-inventory.sh production
 ```
 
-- `bootstrap.yml` se conecta utilizando el usuario inicial de la imagen de OCI (`bootstrap_user`, normalmente `ubuntu`).
-- `production.yml` se conecta utilizando el `admin_user` permanente.
+El primero genera `ansible/inventory/bootstrap.yml` y conecta como `bootstrap_user` (normalmente `ubuntu`). El segundo genera `ansible/inventory/production.yml` y conecta como el `admin_user` creado durante el bootstrap.
 
-`server_hostname`, `bootstrap_user` y `admin_user` se configuran en:
+---
 
-```text
-ansible/inventory/group_vars/all/vars.yml
-```
+# Despliegue desde cero
 
-## Despliegue desde cero
+## 1. Crear el bucket de estado
 
-Para desplegar un entorno completamente nuevo:
-
-### 1. Crear el bucket para el estado de Terraform
-
-Configurar las variables necesarias del Terraform de bootstrap y ejecutar:
+Configurar `terraform/bootstrap-state/terraform.tfvars` y ejecutar:
 
 ```bash
 cd terraform/bootstrap-state
@@ -143,23 +152,15 @@ terraform apply
 cd ../..
 ```
 
-Esto crea el bucket de OCI Object Storage que utilizará la configuración principal de Terraform.
-
-### 2. Generar el backend del Terraform principal
+## 2. Generar el backend
 
 ```bash
 ./scripts/generate-terraform-backend.sh
 ```
 
-Esto genera:
+## 3. Aprovisionar OCI
 
-```text
-terraform/oci/backend.hcl
-```
-
-a partir de los outputs del Terraform de bootstrap.
-
-### 3. Aprovisionar la infraestructura de OCI
+Configurar `terraform/oci/terraform.tfvars` y ejecutar:
 
 ```bash
 cd terraform/oci
@@ -171,19 +172,13 @@ terraform apply
 cd ../..
 ```
 
-Esto aprovisiona el compartment del homelab, la red, la instancia de Compute, la IP pública reservada y el volumen de datos persistente.
+Terraform crea el compartment, la red, la instancia, la IP pública reservada y el volumen persistente.
 
-### 4. Crear el administrador del servidor
-
-Generar un inventario que se conecte utilizando el usuario inicial de la imagen de OCI:
+## 4. Generar el inventario bootstrap y crear el administrador
 
 ```bash
 ./scripts/generate-ansible-inventory.sh bootstrap
-```
 
-Después:
-
-```bash
 cd ansible
 
 ansible-playbook \
@@ -191,51 +186,52 @@ ansible-playbook \
   playbooks/bootstrap.yml
 ```
 
-Esto crea el administrador permanente, instala su clave SSH y configura `sudo` sin contraseña para la automatización.
-
-### 5. Configurar y desplegar el servidor
-
-Generar el inventario de producción:
+## 5. Generar el inventario de producción y desplegar
 
 ```bash
 cd ..
 
 ./scripts/generate-ansible-inventory.sh production
-```
 
-Después:
-
-```bash
 cd ansible
 
+ansible-playbook \
+  -i inventory/production.yml \
+  playbooks/site.yml \
+  -e data_disk_initialize=true \
+  --ask-vault-pass
+```
+
+Este indicador sólo se usa en la primera ejecución sobre un volumen nuevo y vacío: autoriza a Ansible a crear una partición y formatearla. Las ejecuciones posteriores no deben incluirlo:
+
+```bash
 ansible-playbook \
   -i inventory/production.yml \
   playbooks/site.yml \
   --ask-vault-pass
 ```
 
-Ansible configura:
+El playbook configura base, usuarios/SSH, almacenamiento, Docker, redes Docker y stacks Compose gestionados.
 
-```text
-base
-→ usuarios/SSH
-→ almacenamiento
-→ Docker
-→ redes de Docker
-→ stacks de Compose
-```
+---
 
-Esto incluye montar el volumen persistente en `/mnt/data`, instalar Docker, crear la red compartida `proxy`, generar la configuración necesaria en tiempo de ejecución y desplegar los stacks habilitados.
+# Seguridad del almacenamiento
 
-## Gestión de stacks
+Los datos persistentes se separan de la instancia. El volumen OCI se monta en `/mnt/data` y el estado de aplicaciones reside principalmente en `/mnt/data/docker/`.
 
-Las definiciones de los stacks se encuentran en:
+## Protección de inicialización de disco
 
-```text
-stacks/
-```
+Ansible no supone que un disco sin particiones esté vacío. Comprueba particiones, firmas de sistemas de archivos y otras firmas de disco. Si encuentra una firma, se niega a crear una tabla de particiones. Un disco realmente vacío requiere el opt-in explícito `data_disk_initialize=true`; esto protege sistemas de archivos situados directamente en el dispositivo de bloques.
 
-Ansible utiliza dos listas:
+## Recursos OCI persistentes
+
+Terraform protege el volumen de datos y la IP pública reservada con `prevent_destroy`. Sobreviven al reemplazo normal de la instancia; Terraform no los destruye hasta retirar deliberadamente esa protección.
+
+---
+
+# Gestión de stacks Docker
+
+Los stacks viven en `stacks/`. Ansible distingue los stacks que gestiona de los que deben ejecutarse:
 
 ```yaml
 managed_stacks:
@@ -243,40 +239,102 @@ managed_stacks:
   - portainer
   - uptime-kuma
   - monitoring
+  - authentik
 
 enabled_stacks:
   - caddy
   - portainer
   - uptime-kuma
   - monitoring
+  - authentik
 ```
 
-- `managed_stacks` define qué stacks son responsabilidad de Ansible.
-- `enabled_stacks` define qué stacks gestionados deben estar en ejecución.
-- Los stacks gestionados pero deshabilitados se detienen y eliminan mediante Compose.
-- Los stacks que no aparecen en `managed_stacks` no son modificados por Ansible.
+`managed_stacks` define el ciclo de vida bajo Ansible; los stacks ausentes pueden coexistir sin ser modificados. Un stack gestionado y habilitado se reconcilia e inicia. Uno gestionado y deshabilitado se detiene y elimina con Compose.
 
-La configuración de los stacks habilitados se sincroniza en:
+## Reconciliación por stack
+
+Los stacks se pueden reconciliar independientemente. Ejemplo:
+
+```bash
+cd ansible
+
+ansible-playbook \
+  -i inventory/production.yml \
+  playbooks/site.yml \
+  --tags portainer \
+  --ask-vault-pass
+```
+
+Las etiquetas disponibles son `caddy`, `authentik`, `monitoring`, `portainer` y `uptime-kuma`. La validación de dependencias, marcada con `always`, también se ejecuta en despliegues dirigidos.
+
+## Sincronización y entorno de ejecución
+
+La configuración se sincroniza de `stacks/<stack>/` a `/opt/stacks/<stack>/`. Los archivos eliminados del repositorio también se eliminan en el servidor. El estado de ejecución no debe vivir en esas rutas salvo si se excluye explícitamente; las exclusiones incluyen `.env`, `data/`, `logs/`, `postgres/`, `cache/`, `backup/`, `*.db`, `*.sqlite`, `*.log`, `*.key` y `*.pem`.
+
+Ansible genera los `.env` de ejecución y no deben mantenerse manualmente en el servidor. Monitoring recibe `GRAFANA_URL` y `AUTHENTIK_URL` desde `homelab_domain`, de modo que cambiar el dominio actualiza sus URLs en la siguiente reconciliación.
+
+---
+
+# Proxy inverso y HTTPS
+
+Caddy proporciona el acceso público. OCI admite entrada TCP/22 (SSH), TCP/80 (HTTP) y TCP/443 (HTTPS). Los contenedores no deberían publicar directamente puertos de aplicación: Caddy los alcanza mediante la red `proxy` de Docker. Su configuración se genera desde `Caddyfile.j2`, y también puede enrutar servicios no gestionados por Ansible.
+
+## Requisito de DNS
+
+El DNS queda intencionadamente fuera de este repositorio: ni Terraform ni
+Ansible crean registros DNS. Antes del primer despliegue de Caddy, configurar
+en la zona de `homelab_domain` estos dos registros `A`, ambos apuntando a la IP
+pública IPv4 reservada de OCI:
+
+| Nombre | Destino | Propósito |
+| --- | --- | --- |
+| `@` | IPv4 pública reservada de OCI | Dominio raíz |
+| `*` | IPv4 pública reservada de OCI | Todos los subdominios de servicios |
+
+El comodín no cubre el dominio raíz, por lo que ambos registros son necesarios.
+Caddy obtiene y renueva certificados TLS públicos para los hostnames declarados
+en su configuración; el DNS debe resolver hacia el servidor y los puertos TCP
+80 y 443 deben permanecer accesibles públicamente.
+
+## Rutas de Caddy
+
+`Caddyfile.j2` declara actualmente estas rutas. Una ruta puede existir aunque
+su backend no esté gestionado o esté deshabilitado; en ese caso el hostname
+resolverá correctamente, pero devolverá un error de proxy hasta que el backend
+esté disponible.
+
+| Hostname | Backend |
+| --- | --- |
+| `{{ homelab_domain }}` | `apache:80` |
+| `www.{{ homelab_domain }}` | Redirección al dominio raíz |
+| `n8n.{{ homelab_domain }}` | `n8n:5678` |
+| `portainer.{{ homelab_domain }}` | `portainer:9000` |
+| `status.{{ homelab_domain }}` | `uptime-kuma:3001` |
+| `paperless.{{ homelab_domain }}` | `paperless:8000` |
+| `pdf.{{ homelab_domain }}` | `stirling-pdf:8080` |
+| `airflow.{{ homelab_domain }}` | `airflow-api-server:8080` |
+| `grafana.{{ homelab_domain }}` | `grafana:3000` |
+| `auth.{{ homelab_domain }}` | `authentik-server:9000` |
+
+---
+
+# Autenticación y dependencias
+
+Authentik proporciona autenticación centralizada para Grafana y Portainer. Ansible administra sus proveedores y aplicaciones mediante Blueprints con valores del Vault, ubicados en `/opt/stacks/authentik/blueprints/`.
+
+Los Blueprints contienen potencialmente contraseñas o secretos OAuth. El directorio es privado para el administrador de despliegue; el worker de Authentik recibe sólo acceso de lectura mediante ACL POSIX explícitas. Otros usuarios no tienen acceso.
 
 ```text
-/opt/stacks/
+Portainer ────┐
+              ├──► Authentik
+Grafana ──────┘
 ```
 
-La configuración sincronizada se reconcilia con el repositorio, por lo que los archivos de configuración eliminados del repositorio también se eliminan del servidor.
+Ansible rechaza habilitar `portainer` o `monitoring` mientras `authentik` esté deshabilitado, incluso en ejecuciones dirigidas.
 
-Los datos de ejecución, secretos, logs, bases de datos, cachés y backups quedan excluidos de esta sincronización.
+---
 
-Los datos persistentes de las aplicaciones se almacenan por separado en:
-
-```text
-/mnt/data/docker/
-```
-
-Las imágenes utilizadas por los stacks actualmente habilitados utilizan versiones fijadas en lugar de tags flotantes como `latest`. Otros stacks disponibles pueden seguir utilizando tags flotantes y deberían fijarse antes de habilitarlos.
-
-## Comprobar antes de aplicar cambios
-
-Antes de realizar cambios importantes con Ansible:
+# Comprobar cambios antes de aplicar
 
 ```bash
 cd ansible
@@ -289,58 +347,58 @@ ansible-playbook \
   --ask-vault-pass
 ```
 
-Un servidor correctamente convergido normalmente no debería mostrar cambios.
+Un host convergido normalmente no muestra cambios. `no_log: true` evita que los secretos renderizados aparezcan en el diff; el modo check no simula perfectamente todas las acciones de Docker o de servicios externos.
 
-Terraform puede comprobarse con:
+Para infraestructura:
 
 ```bash
 cd terraform/oci
+
 terraform plan
 ```
 
-Un entorno convergido debería mostrar:
+---
 
-```text
-No changes. Your infrastructure matches the configuration.
+# Validación, actualización y recuperación
+
+Tras desplegar, comprobar:
+
+```bash
+docker ps
+docker compose ls
+findmnt /mnt/data
 ```
 
-## Recursos persistentes
+El flujo habitual para actualizar un stack es modificar la configuración, ejecutar `--check --diff`, reconciliar el stack afectado con `--tags`, verificarlo y, si hace falta, realizar una convergencia completa.
 
-Terraform protege el volumen de datos persistente y la IP pública reservada mediante `prevent_destroy`.
+Las imágenes de los stacks habilitados deben fijarse a versiones explícitas; antes de actualizarlas, revisar la versión upstream, desplegar intencionadamente y verificar el resultado.
 
-Por tanto, estos recursos sobreviven al reemplazo normal de la instancia de Compute y no pueden destruirse accidentalmente sin eliminar primero de forma explícita esta protección del ciclo de vida.
+Para reconstruir la instancia, conservar el volumen OCI protegido, recrear la infraestructura con Terraform, generar los inventarios, ejecutar bootstrap y site, reutilizar el volumen y reconciliar los stacks. Los datos persistentes requieren además su propia estrategia de copias de seguridad.
 
-## Exposición de red
+---
 
-OCI permite tráfico entrante en:
+# Límites del repositorio y gestión de secretos
 
-- TCP/22 — SSH
-- TCP/80 — HTTP
-- TCP/443 — HTTPS
+Se versionan la configuración de Terraform y Ansible, el Vault cifrado, las definiciones Compose, plantillas, Blueprints, scripts y documentación. No se versionan `backend.hcl`, inventarios generados, variables ni estado local de Terraform, claves privadas SSH/OCI, Vault descifrado, `.env` reales, bases de datos, datos de aplicaciones, logs, cachés ni backups.
 
-Las aplicaciones públicas deberían exponerse normalmente a través de Caddy en lugar de publicar directamente sus puertos de aplicación.
+El flujo de secretos es:
 
-Caddy también puede enrutar tráfico hacia servicios gestionados fuera de Ansible. Estos servicios no necesitan aparecer en `managed_stacks`.
+```text
+Ansible Vault cifrado → Ansible → .env y Blueprints → configuración de aplicación
+```
 
-## Contenido del repositorio
+Los secretos en texto plano existen en el host sólo cuando las aplicaciones los necesitan. La contraseña del Vault, las credenciales OCI y las claves privadas SSH deben conservarse por separado en un gestor de contraseñas u otra ubicación segura.
 
-**Versionado en Git:**
+---
 
-- configuración de Terraform
-- ejemplo de configuración del backend de Terraform
-- configuración de Ansible
-- Ansible Vault cifrado
-- definiciones de Compose
-- plantillas de configuración
-- scripts auxiliares
+# Principios operativos
 
-**No versionado en Git:**
-
-- `terraform/oci/backend.hcl` generado
-- inventarios de Ansible generados
-- archivos de variables de Terraform
-- estado local de Terraform
-- claves privadas SSH/API
-- archivos `.env` reales
-- datos de las aplicaciones
-- bases de datos, logs, cachés y backups
+1. **La infraestructura y la configuración son reproducibles** con Terraform y Ansible.
+2. **Los datos persistentes se separan del cómputo** en un volumen OCI dedicado.
+3. **Las operaciones destructivas requieren autorización explícita**.
+4. **Los secretos no se guardan en texto plano en Git**.
+5. **Los stacks se reconcilian de forma independiente** mediante etiquetas de Ansible.
+6. **Las dependencias se validan** antes de reconciliar.
+7. **Los servicios públicos pasan por el proxy inverso** y los puertos de aplicación no se exponen normalmente de forma directa.
+8. **Las versiones de contenedores se fijan** para despliegues reproducibles.
+9. **La configuración manual debe minimizarse** y documentarse cuando sea necesaria.

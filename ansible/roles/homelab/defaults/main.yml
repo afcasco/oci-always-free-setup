@@ -1,0 +1,23 @@
+stack_sync_rsync_opts:
+  - --exclude=.git/
+  - --exclude=.env
+  - --exclude=.env.*
+  - --exclude=*/data/
+  - --exclude=*/logs/
+  - --exclude=*/postgres/
+  - --exclude=*/cache/
+  - --exclude=*/heap_dumps/
+  - --exclude=*/backup/
+  - --exclude=*/__pycache__/
+  - --exclude=*.db
+  - --exclude=*.db-*
+  - --exclude=*.sqlite
+  - --exclude=*.sqlite-*
+  - --exclude=*.rdb
+  - --exclude=*.log
+  - --exclude=*.key
+  - --exclude=*.pem
+  - --no-owner
+  - --no-group
+  - --omit-dir-times
+  - --no-perms

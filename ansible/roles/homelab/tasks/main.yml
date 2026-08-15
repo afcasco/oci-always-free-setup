@@ -1,150 +1,6 @@
-- name: Ensure enabled stack directories exist
-  ansible.builtin.file:
-    path: "/opt/stacks/{{ item }}"
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0755"
-  loop: "{{ enabled_stacks }}"
-
 - name: Determine disabled managed stacks
   ansible.builtin.set_fact:
     disabled_stacks: "{{ managed_stacks | difference(enabled_stacks) }}"
-
-- name: Synchronize enabled stack configuration
-  ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../stacks/{{ item }}/"
-    dest: "/opt/stacks/{{ item }}/"
-    archive: true
-    delete: true
-    rsync_opts: >-
-      {{
-        [
-          '--exclude=.git/',
-          '--exclude=.env',
-          '--exclude=.env.*',
-          '--exclude=*/data/',
-          '--exclude=*/logs/',
-          '--exclude=*/postgres/',
-          '--exclude=*/cache/',
-          '--exclude=*/heap_dumps/',
-          '--exclude=*/backup/',
-          '--exclude=*/__pycache__/',
-          '--exclude=*.db',
-          '--exclude=*.db-*',
-          '--exclude=*.sqlite',
-          '--exclude=*.sqlite-*',
-          '--exclude=*.rdb',
-          '--exclude=*.log',
-          '--exclude=*.key',
-          '--exclude=*.pem',
-          '--exclude=simple_auth_manager_passwords.json',
-          '--no-owner',
-          '--no-group',
-          '--omit-dir-times',
-          '--no-perms'
-        ]
-        + (['--exclude=Caddyfile'] if item == 'caddy' else [])
-        + (
-            [
-              '--exclude=blueprints/grafana.yaml',
-              '--exclude=blueprints/portainer.yaml',
-              '--exclude=blueprints/users.yaml'
-            ]
-            if item == 'authentik'
-            else []
-          )
-      }}
-  become: false
-  loop: "{{ enabled_stacks }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Ensure Caddy environment file is configured
-  ansible.builtin.template:
-    src: caddy.env.j2
-    dest: /opt/stacks/caddy/.env
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0600"
-  when: "'caddy' in enabled_stacks"
-
-- name: Ensure Monitoring environment file is configured
-  ansible.builtin.template:
-    src: monitoring.env.j2
-    dest: /opt/stacks/monitoring/.env
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0600"
-  when: "'monitoring' in enabled_stacks"
-
-- name: Ensure Caddyfile is configured
-  ansible.builtin.template:
-    src: Caddyfile.j2
-    dest: /opt/stacks/caddy/Caddyfile
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0644"
-  notify: Recreate Caddy
-  when: "'caddy' in enabled_stacks"
-
-- name: Ensure Portainer environment file is configured
-  ansible.builtin.template:
-    src: portainer.env.j2
-    dest: /opt/stacks/portainer/.env
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0600"
-  when: "'portainer' in enabled_stacks"
-
-- name: Ensure Authentik environment file is configured
-  ansible.builtin.template:
-    src: authentik.env.j2
-    dest: /opt/stacks/authentik/.env
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0600"
-  no_log: true
-  when: "'authentik' in enabled_stacks"
-
-- name: Ensure Authentik blueprint directory exists
-  ansible.builtin.file:
-    path: /opt/stacks/authentik/blueprints
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0755"
-  when: "'authentik' in enabled_stacks"
-
-- name: Ensure Authentik users blueprint is configured
-  ansible.builtin.template:
-    src: authentik-blueprint-users.yaml.j2
-    dest: /opt/stacks/authentik/blueprints/users.yaml
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0644"
-  no_log: true
-  when: "'authentik' in enabled_stacks"
-
-- name: Ensure Grafana Authentik blueprint is configured
-  ansible.builtin.template:
-    src: authentik-blueprint-grafana.yaml.j2
-    dest: /opt/stacks/authentik/blueprints/grafana.yaml
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0644"
-  no_log: true
-  when: "'authentik' in enabled_stacks"
-
-- name: Ensure Portainer Authentik blueprint is configured
-  ansible.builtin.template:
-    src: authentik-blueprint-portainer.yaml.j2
-    dest: /opt/stacks/authentik/blueprints/portainer.yaml
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0644"
-  no_log: true
-  when: "'authentik' in enabled_stacks"
 
 - name: Check disabled managed stack directories
   ansible.builtin.stat:
@@ -163,95 +19,27 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Ensure enabled stacks are running
-  community.docker.docker_compose_v2:
-    project_src: "/opt/stacks/{{ item }}"
-    state: present
-  loop: "{{ enabled_stacks }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Reconcile Caddy configuration
+  ansible.builtin.import_tasks: caddy.yml
+  tags:
+    - caddy
 
-- name: Wait for Portainer API
-  ansible.builtin.uri:
-    url: "{{ portainer_url }}/api/status"
-    method: GET
-    status_code: 200
-    validate_certs: true
-  register: portainer_ready
-  retries: 20
-  delay: 3
-  until: portainer_ready.status == 200
-  when:
-    - "'portainer' in enabled_stacks"
-    - not ansible_check_mode
+- name: Reconcile Authentik configuration
+  ansible.builtin.import_tasks: authentik.yml
+  tags:
+    - authentik
 
-- name: Initialize Portainer admin on fresh installation
-  ansible.builtin.uri:
-    url: "{{ portainer_url }}/api/users/admin/init"
-    method: POST
-    body_format: json
-    body:
-      Username: "{{ portainer_admin_user }}"
-      Password: "{{ portainer_admin_password }}"
-    status_code:
-      - 200
-      - 409
-    validate_certs: true
-  no_log: true
-  when:
-    - "'portainer' in enabled_stacks"
-    - not ansible_check_mode
+- name: Reconcile Monitoring configuration
+  ansible.builtin.import_tasks: monitoring.yml
+  tags:
+    - monitoring
 
-- name: Authenticate to Portainer API
-  ansible.builtin.uri:
-    url: "{{ portainer_url }}/api/auth"
-    method: POST
-    body_format: json
-    body:
-      Username: "{{ portainer_admin_user }}"
-      Password: "{{ portainer_admin_password }}"
-    return_content: true
-    status_code: 200
-    validate_certs: true
-  register: portainer_auth
-  no_log: true
-  when:
-    - "'portainer' in enabled_stacks"
-    - not ansible_check_mode
+- name: Reconcile Portainer configuration
+  ansible.builtin.import_tasks: portainer.yml
+  tags:
+    - portainer
 
-- name: Configure Portainer OAuth with Authentik
-  ansible.builtin.uri:
-    url: "{{ portainer_url }}/api/settings"
-    method: PUT
-    headers:
-      Authorization: "Bearer {{ portainer_auth.json.jwt }}"
-    body_format: json
-    body:
-      AuthenticationMethod: 3
-      OAuthSettings:
-        ClientID: "{{ portainer_oidc_client_id }}"
-        ClientSecret: "{{ portainer_oidc_client_secret }}"
-        AuthorizationURI: "{{ authentik_url }}/application/o/authorize/"
-        AccessTokenURI: "{{ authentik_url }}/application/o/token/"
-        ResourceURI: "{{ authentik_url }}/application/o/userinfo/"
-        RedirectURI: "{{ portainer_url }}/"
-        LogoutURI: "{{ authentik_url }}/application/o/portainer/end-session/"
-        UserIdentifier: preferred_username
-        Scopes: "openid email profile"
-        OAuthAutoCreateUsers: true
-        OAuthAutoMapTeamMemberships: false
-        DefaultTeamID: 0
-        HideInternalAuth: true
-        SSO: true
-        AuthStyle: 0
-        TeamMemberships:
-          AdminAutoPopulate: false
-          AdminGroupClaimsRegexList: []
-          OAuthClaimMappings: []
-          OAuthClaimName: ""
-    status_code: 200
-    validate_certs: true
-  no_log: true
-  when:
-    - "'portainer' in enabled_stacks"
-    - not ansible_check_mode
+- name: Reconcile Uptime Kuma configuration
+  ansible.builtin.import_tasks: uptime-kuma.yml
+  tags:
+    - uptime-kuma

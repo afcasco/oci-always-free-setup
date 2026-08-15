@@ -1,0 +1,24 @@
+- name: Ensure Uptime Kuma stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/uptime-kuma
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'uptime-kuma' in enabled_stacks"
+
+- name: Synchronize Uptime Kuma stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/uptime-kuma/"
+    dest: /opt/stacks/uptime-kuma/
+    archive: true
+    delete: true
+    rsync_opts: "{{ stack_sync_rsync_opts }}"
+  become: false
+  when: "'uptime-kuma' in enabled_stacks"
+
+- name: Ensure Uptime Kuma stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/uptime-kuma
+    state: present
+  when: "'uptime-kuma' in enabled_stacks"

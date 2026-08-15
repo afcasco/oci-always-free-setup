@@ -1,0 +1,43 @@
+- name: Ensure Caddy stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/caddy
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'caddy' in enabled_stacks"
+
+- name: Synchronize Caddy stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/caddy/"
+    dest: /opt/stacks/caddy/
+    archive: true
+    delete: true
+    rsync_opts: "{{ stack_sync_rsync_opts + ['--exclude=Caddyfile'] }}"
+  become: false
+  when: "'caddy' in enabled_stacks"
+
+- name: Ensure Caddy environment file is configured
+  ansible.builtin.template:
+    src: caddy.env.j2
+    dest: /opt/stacks/caddy/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  when: "'caddy' in enabled_stacks"
+
+- name: Ensure Caddyfile is configured
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /opt/stacks/caddy/Caddyfile
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0644"
+  notify: Recreate Caddy
+  when: "'caddy' in enabled_stacks"
+
+- name: Ensure Caddy stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/caddy
+    state: present
+  when: "'caddy' in enabled_stacks"

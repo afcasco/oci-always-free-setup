@@ -1,0 +1,61 @@
+- name: Ensure Authentik stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/authentik
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'authentik' in enabled_stacks"
+
+- name: Synchronize Authentik stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/authentik/"
+    dest: /opt/stacks/authentik/
+    archive: true
+    delete: true
+    rsync_opts: >-
+      {{
+        stack_sync_rsync_opts
+        + [
+            '--exclude=blueprints/grafana.yaml',
+            '--exclude=blueprints/portainer.yaml',
+            '--exclude=blueprints/users.yaml'
+          ]
+      }}
+  become: false
+  when: "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik environment file is configured
+  ansible.builtin.template:
+    src: authentik.env.j2
+    dest: /opt/stacks/authentik/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik blueprint directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/blueprints
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik users blueprint is configured
+  ansible.builtin.template:
+    src: authentik-blueprint-users.yaml.j2
+    dest: /opt/stacks/authentik/blueprints/users.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0644"
+  no_log: true
+  when: "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/authentik
+    state: present
+  when: "'authentik' in enabled_stacks"

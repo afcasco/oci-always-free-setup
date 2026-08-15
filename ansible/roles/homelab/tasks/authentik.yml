@@ -1,3 +1,12 @@
+- name: Ensure Authentik stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/authentik
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'authentik' in enabled_stacks"
+
 - name: Ensure Authentik blueprint directory access
   ansible.builtin.import_tasks: authentik-blueprint-dir.yml
   when: "'authentik' in enabled_stacks"

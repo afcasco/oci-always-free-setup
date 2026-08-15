@@ -72,3 +72,9 @@ variable "compartment_description" {
   description = "Description of the OCI compartment"
   type        = string
 }
+
+variable "bootstrap_ssh_cidr" {
+  description = "CIDR temporarily allowed to access SSH during bootstrap or recovery. Null disables public SSH."
+  type        = string
+  default     = null
+}

@@ -34,7 +34,8 @@
             '--exclude=blueprints/portainer.yaml',
             '--exclude=blueprints/users.yaml',
             '--exclude=blueprints/authentication.yaml',
-            '--exclude=.blueprint-staging/'
+            '--exclude=.blueprint-staging/',
+            '--exclude=blueprints/uptime-kuma.yaml'
           ]
       }}
   become: false

@@ -17,8 +17,161 @@
   become: false
   when: "'uptime-kuma' in enabled_stacks"
 
+#
+# Authentik blueprint
+#
+
+- name: Ensure Authentik blueprint directory access for Uptime Kuma
+  ansible.builtin.import_tasks: authentik-blueprint-dir.yml
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik blueprint staging directory exists for Uptime Kuma
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/.blueprint-staging
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Render Uptime Kuma Authentik blueprint to staging
+  ansible.builtin.template:
+    src: authentik-blueprint-uptime-kuma.yaml.j2
+    dest: /opt/stacks/authentik/.blueprint-staging/uptime-kuma.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0640"
+  no_log: true
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read staged Uptime Kuma blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/uptime-kuma.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged Uptime Kuma blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/uptime-kuma.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged Uptime Kuma blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/uptime-kuma.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Publish Uptime Kuma Authentik blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/uptime-kuma.yaml"
+    dst="/opt/stacks/authentik/blueprints/uptime-kuma.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/uptime-kuma.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_uptime_kuma_blueprint_publish
+  changed_when: "'changed' in authentik_uptime_kuma_blueprint_publish.stdout"
+  no_log: true
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+#
+# Uptime Kuma stack
+#
+
 - name: Ensure Uptime Kuma stack is running
   community.docker.docker_compose_v2:
     project_src: /opt/stacks/uptime-kuma
     state: present
   when: "'uptime-kuma' in enabled_stacks"
+
+- name: Wait for Uptime Kuma database to be ready
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - uptime-kuma
+      - sqlite3
+      - /app/data/kuma.db
+      - "SELECT 1 FROM setting LIMIT 1;"
+  register: uptime_kuma_db_ready
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: uptime_kuma_db_ready.rc == 0
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - not ansible_check_mode
+
+- name: Ensure Uptime Kuma internal authentication is disabled
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    current="$(
+      docker exec uptime-kuma sqlite3 /app/data/kuma.db \
+        "SELECT value FROM setting WHERE key = 'disableAuth';"
+    )"
+
+    if [ "$current" != "true" ]; then
+      docker exec uptime-kuma sqlite3 /app/data/kuma.db "
+        INSERT INTO setting (key, value, type)
+        VALUES ('disableAuth', 'true', 'general')
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          type = excluded.type;
+      "
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: uptime_kuma_disable_auth
+  changed_when: "'changed' in uptime_kuma_disable_auth.stdout"
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - not ansible_check_mode
+
+- name: Restart Uptime Kuma after authentication setting change
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/uptime-kuma
+    state: restarted
+  when:
+    - "'uptime-kuma' in enabled_stacks"
+    - not ansible_check_mode
+    - uptime_kuma_disable_auth.changed

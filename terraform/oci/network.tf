@@ -62,6 +62,21 @@ resource "oci_core_security_list" "gizmo" {
     }
   }
 
+  dynamic "ingress_security_rules" {
+    for_each = var.bootstrap_ssh_cidr != null ? [var.bootstrap_ssh_cidr] : []
+
+    content {
+      description = "temporary bootstrap SSH"
+      protocol    = "6"
+      source      = ingress_security_rules.value
+
+      tcp_options {
+        min = 22
+        max = 22
+      }
+    }
+  }
+
   ingress_security_rules {
     description = "http"
     protocol    = "6"

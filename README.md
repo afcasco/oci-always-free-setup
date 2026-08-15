@@ -2,7 +2,8 @@
 
 # OCI Homelab
 
-Infrastructure-as-code for provisioning and operating a Docker homelab on Oracle Cloud Infrastructure (OCI). Compute is reproducible from code; persistent application data lives on a separate OCI block volume mounted at `/mnt/data`.
+My Docker homelab on Oracle Cloud Infrastructure (OCI), kept in code so I can
+rebuild the server without losing the application data on `/mnt/data`.
 
 - **Terraform** provisions OCI networking, compute, reserved public IP and persistent storage.
 - **Ansible** bootstraps the host and reconciles managed Docker Compose stacks.
@@ -39,7 +40,7 @@ scripts/     inventory/backend generation helpers
 
 Runtime state is kept outside the Git working tree.
 
-# Prerequisites
+# What you'll need
 
 The deployment machine requires Terraform >= 1.12, Ansible, Python 3 with PyYAML, rsync, OCI API credentials and an SSH key. OCI credentials are expected in `~/.oci/config`.
 
@@ -48,11 +49,11 @@ cd ansible
 ansible-galaxy collection install -r requirements.yml
 ```
 
-# Configuration
+# Before you start
 
 ## Terraform
 
-Create the unversioned files:
+Create these local files (they are intentionally not committed):
 
 ```text
 terraform/bootstrap-state/terraform.tfvars
@@ -74,11 +75,13 @@ instance_private_ip     = "10.0.0.137"
 ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
 ```
 
-Never commit real `terraform.tfvars`.
+Keep real `terraform.tfvars` files out of Git.
 
 ## Ansible
 
-Non-secret configuration lives in `ansible/inventory/group_vars/all/vars.yml`. Review at least `homelab_domain`, `server_hostname`, `bootstrap_user`, `admin_user`, `admin_ssh_public_key`, `data_filesystem_label`, `managed_stacks` and `enabled_stacks`.
+The non-secret settings live in `ansible/inventory/group_vars/all/vars.yml`.
+Before a new deployment, set your domain, host/user details, SSH public key,
+disk label, and the stacks you want enabled.
 
 Production secrets are stored encrypted in `ansible/inventory/group_vars/production/vault.yml`.
 

@@ -2,7 +2,9 @@
 
 # OCI Homelab
 
-Infraestructura como código para aprovisionar y operar un homelab Docker en Oracle Cloud Infrastructure (OCI). El cómputo se reconstruye desde código y los datos persistentes viven en un volumen OCI independiente montado en `/mnt/data`.
+Mi homelab Docker en Oracle Cloud Infrastructure (OCI), guardado como código
+para poder reconstruir el servidor sin perder los datos de aplicaciones en
+`/mnt/data`.
 
 - **Terraform** aprovisiona red, cómputo, IP pública reservada y almacenamiento persistente.
 - **Ansible** prepara el host y reconcilia los stacks Docker Compose gestionados.
@@ -39,7 +41,7 @@ scripts/     generación de inventarios y backend
 
 El estado de ejecución queda fuera del árbol de Git.
 
-# Requisitos previos
+# Lo que necesitas
 
 El equipo de despliegue necesita Terraform >= 1.12, Ansible, Python 3 con PyYAML, rsync, credenciales API de OCI y una clave SSH. Las credenciales OCI se esperan en `~/.oci/config`.
 
@@ -48,11 +50,11 @@ cd ansible
 ansible-galaxy collection install -r requirements.yml
 ```
 
-# Configuración
+# Antes de empezar
 
 ## Terraform
 
-Crear los archivos no versionados:
+Crear estos archivos locales (intencionadamente no versionados):
 
 ```text
 terraform/bootstrap-state/terraform.tfvars
@@ -74,11 +76,13 @@ instance_private_ip     = "10.0.0.137"
 ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
 ```
 
-No versionar archivos reales `terraform.tfvars`.
+No subir archivos `terraform.tfvars` reales a Git.
 
 ## Ansible
 
-La configuración no secreta está en `ansible/inventory/group_vars/all/vars.yml`. Revisar al menos `homelab_domain`, `server_hostname`, `bootstrap_user`, `admin_user`, `admin_ssh_public_key`, `data_filesystem_label`, `managed_stacks` y `enabled_stacks`.
+La configuración no secreta está en `ansible/inventory/group_vars/all/vars.yml`.
+Antes de un despliegue nuevo, ajustar el dominio, datos del host y usuarios,
+clave SSH pública, etiqueta del disco y los stacks que quieres habilitar.
 
 Los secretos de producción están cifrados en `ansible/inventory/group_vars/production/vault.yml`.
 

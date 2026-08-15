@@ -58,7 +58,21 @@ caddy_bind_ip: 10.0.0.137
 
 grafana_admin_user: "{{ vault_grafana_admin_user }}"
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
+grafana_url: "https://grafana.{{ homelab_domain }}"
+authentik_url: "https://auth.{{ homelab_domain }}"
+grafana_oidc_client_secret: "{{ vault_grafana_oidc_client_secret }}"
+grafana_oidc_client_id: grafana
 
+portainer_admin_user: afcasco
+portainer_admin_password: "{{ vault_portainer_admin_password }}"
+portainer_url: "https://portainer.{{ homelab_domain }}"
+portainer_oidc_client_id: portainer
+portainer_oidc_client_secret: "{{ vault_portainer_oidc_client_secret }}"
+
+authentik_primary_user: afcasco
+authentik_primary_user_name: "Alex"
+authentik_primary_user_email: "afcasco@gmail.com"
+authentik_primary_user_password: "{{ vault_authentik_primary_user_password }}"
 authentik_pg_db: authentik
 authentik_pg_user: authentik
 authentik_pg_pass: "{{ vault_authentik_pg_pass }}"

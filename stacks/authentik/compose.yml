@@ -54,7 +54,7 @@ services:
     volumes:
       - /mnt/data/docker/authentik/data:/data
       - /mnt/data/docker/authentik/certs:/certs
-      - ./custom-templates:/templates
+      - ./blueprints:/blueprints/custom
 
 networks:
   proxy:

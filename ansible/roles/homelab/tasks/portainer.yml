@@ -33,13 +33,8 @@
     state: present
   when: "'portainer' in enabled_stacks"
 
-- name: Ensure Authentik blueprint directory exists for Portainer
-  ansible.builtin.file:
-    path: /opt/stacks/authentik/blueprints
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0755"
+- name: Ensure Authentik blueprint directory access for Portainer
+  ansible.builtin.import_tasks: authentik-blueprint-dir.yml
   when:
     - "'portainer' in enabled_stacks"
     - "'authentik' in enabled_stacks"
@@ -50,8 +45,19 @@
     dest: /opt/stacks/authentik/blueprints/portainer.yaml
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
-    mode: "0644"
+    mode: "0600"
   no_log: true
+  when:
+    - "'portainer' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read Portainer blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/blueprints/portainer.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
   when:
     - "'portainer' in enabled_stacks"
     - "'authentik' in enabled_stacks"

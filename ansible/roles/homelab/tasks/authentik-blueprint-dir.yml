@@ -1,0 +1,22 @@
+- name: Ensure Authentik blueprint directory is private
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/blueprints
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Allow Authentik worker to access blueprint directory
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/blueprints
+    entity: "1000"
+    etype: user
+    permissions: "rx"
+    state: present
+
+- name: Deny access to other users on blueprint directory
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/blueprints
+    etype: other
+    permissions: "---"
+    state: present

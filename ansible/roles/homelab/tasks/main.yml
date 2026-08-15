@@ -2,6 +2,21 @@
   ansible.builtin.set_fact:
     disabled_stacks: "{{ managed_stacks | difference(enabled_stacks) }}"
 
+- name: Validate stack dependencies
+  ansible.builtin.assert:
+    that:
+      - >
+        'authentik' in enabled_stacks
+        or (
+          'portainer' not in enabled_stacks
+          and 'monitoring' not in enabled_stacks
+        )
+    fail_msg: >-
+      Authentik must be enabled while Portainer or monitoring SSO is enabled.
+      Disable those dependent stacks first, or keep Authentik enabled.
+  tags:
+    - always
+
 - name: Check disabled managed stack directories
   ansible.builtin.stat:
     path: "/opt/stacks/{{ item }}"

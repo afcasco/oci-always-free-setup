@@ -1,10 +1,5 @@
-- name: Ensure Authentik stack directory exists
-  ansible.builtin.file:
-    path: /opt/stacks/authentik
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0755"
+- name: Ensure Authentik blueprint directory access
+  ansible.builtin.import_tasks: authentik-blueprint-dir.yml
   when: "'authentik' in enabled_stacks"
 
 - name: Synchronize Authentik stack configuration
@@ -35,23 +30,23 @@
   no_log: true
   when: "'authentik' in enabled_stacks"
 
-- name: Ensure Authentik blueprint directory exists
-  ansible.builtin.file:
-    path: /opt/stacks/authentik/blueprints
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0755"
-  when: "'authentik' in enabled_stacks"
-
 - name: Ensure Authentik users blueprint is configured
   ansible.builtin.template:
     src: authentik-blueprint-users.yaml.j2
     dest: /opt/stacks/authentik/blueprints/users.yaml
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
-    mode: "0644"
+    mode: "0600"
   no_log: true
+  when: "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read users blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/blueprints/users.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
   when: "'authentik' in enabled_stacks"
 
 - name: Ensure Authentik stack is running

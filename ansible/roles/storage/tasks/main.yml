@@ -50,11 +50,48 @@
   changed_when: false
   check_mode: false
 
-- name: Determine whether data disk is blank
-  ansible.builtin.set_fact:
-    data_disk_is_blank: "{{ 'part' not in data_disk_types.stdout_lines }}"
+- name: Inspect data disk signatures
+  ansible.builtin.command:
+    cmd: "wipefs --noheadings --output TYPE {{ data_disk }}"
+  register: data_disk_signatures
+  changed_when: false
+  check_mode: false
 
-- name: Create GPT partition table on blank data disk
+- name: Determine data disk state
+  ansible.builtin.set_fact:
+    data_disk_has_partitions: "{{ 'part' in data_disk_types.stdout_lines }}"
+    data_disk_has_signatures: "{{ data_disk_signatures.stdout | trim | length > 0 }}"
+
+- name: Refuse to initialize unpartitioned disk containing existing data
+  ansible.builtin.assert:
+    that:
+      - data_disk_has_partitions or not data_disk_has_signatures
+    fail_msg: >-
+      {{ data_disk }} has no partitions but contains an existing filesystem
+      or disk signature. Refusing to create a partition table because doing
+      so could destroy existing data.
+
+- name: Refuse to initialize blank data disk without explicit approval
+  ansible.builtin.assert:
+    that:
+      - data_disk_initialize | bool
+    fail_msg: >-
+      {{ data_disk }} appears to be blank. Set data_disk_initialize=true
+      explicitly to allow Ansible to partition and format it.
+  when:
+    - not data_disk_has_partitions
+    - not data_disk_has_signatures
+
+- name: Determine whether data disk should be initialized
+  ansible.builtin.set_fact:
+    data_disk_should_initialize: >-
+      {{
+        not data_disk_has_partitions
+        and not data_disk_has_signatures
+        and data_disk_initialize | bool
+      }}
+
+- name: Create GPT partition table on explicitly approved blank data disk
   community.general.parted:
     device: "{{ data_disk }}"
     label: gpt
@@ -62,7 +99,7 @@
     state: present
     part_start: "0%"
     part_end: "100%"
-  when: data_disk_is_blank
+  when: data_disk_should_initialize
 
 - name: Set data partition device
   ansible.builtin.set_fact:
@@ -72,12 +109,12 @@
         ('p1' if data_disk is match('.*[0-9]$') else '1')
       }}
 
-- name: Create ext4 filesystem on new data partition
+- name: Create filesystem on new data partition
   community.general.filesystem:
     fstype: "{{ data_filesystem_type }}"
     dev: "{{ data_partition }}"
     opts: "-L {{ data_filesystem_label }}"
-  when: data_disk_is_blank
+  when: data_disk_should_initialize
 
 - name: Inspect detected data disk
   ansible.builtin.command:

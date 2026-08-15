@@ -33,6 +33,7 @@ entries:
       name: homelab-authentication-totp-setup
     attrs:
       name: homelab-authentication-totp-setup
+      friendly_name: Authenticator app
       digits: "6"
 
   - model: authentik_stages_authenticator_webauthn.authenticatorwebauthnstage
@@ -42,6 +43,7 @@ entries:
       name: homelab-authentication-webauthn-setup
     attrs:
       name: homelab-authentication-webauthn-setup
+      friendly_name: Passkey or security key
       user_verification: preferred
       resident_key_requirement: preferred
 

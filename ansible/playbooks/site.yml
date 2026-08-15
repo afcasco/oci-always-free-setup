@@ -18,5 +18,11 @@
     - role: docker_networks
       tags: docker_networks
 
+    - role: firewall
+      tags: firewall
+
+    - role: wireguard
+      tags: wireguard
+
     - role: homelab
       tags: homelab

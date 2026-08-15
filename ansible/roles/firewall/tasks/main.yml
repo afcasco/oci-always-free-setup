@@ -1,0 +1,24 @@
+- name: Ensure iptables persistence packages are installed
+  ansible.builtin.apt:
+    name:
+      - iptables
+      - iptables-persistent
+      - netfilter-persistent
+    state: present
+    update_cache: true
+
+- name: Allow WireGuard UDP port in live firewall
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: udp
+    destination_port: "{{ wireguard_port }}"
+    jump: ACCEPT
+    comment: "WireGuard"
+    action: insert
+
+- name: Persist WireGuard firewall rule
+  ansible.builtin.lineinfile:
+    path: /etc/iptables/rules.v4
+    line: "-A INPUT -p udp -m udp --dport {{ wireguard_port }} -m comment --comment \"WireGuard\" -j ACCEPT"
+    insertbefore: '^-A INPUT -j REJECT'
+    state: present

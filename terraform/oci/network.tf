@@ -93,6 +93,17 @@ resource "oci_core_security_list" "gizmo" {
       max = 443
     }
   }
+
+  ingress_security_rules {
+    description = "wireguard"
+    protocol    = "17"
+    source      = "0.0.0.0/0"
+
+    udp_options {
+      min = 51820
+      max = 51820
+    }
+  }
 }
 
 resource "oci_core_subnet" "gizmo" {

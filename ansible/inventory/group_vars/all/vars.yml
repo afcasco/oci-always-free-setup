@@ -26,6 +26,16 @@ admin_user_groups:
 
 admin_ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDaeGefakiewZ5iEqYvQ+M40HA9ZFhFkPSBbH9iXoqXZTkhCRjuOeJXSsVs4PB3GSlxhGVEynieKSn6Lg374bDjosRwwL+Gl2ra9oEnMFTHYFUIBTOJpRUL4PdN2IORFnFGzxeA1nuVbSUi5S450AhFgn3apwov6deFMkJEAxDRdGLysPPk2AmutK+UmDxIJ6yd3mLX01n4sYANeBONwkc/w5pmQCFkiluLec6C/cqc6RjIUBNzwdA7jzKfP8LeHei1a5dmuElh1xoKRKj4wB4ohI9nv6EQYODs8Ea5XODWICw+i1GIK6iwvvga9/dQFzMx/IU22Ojo0lfNZ1mV2LM3 ssh-key-2026-07-11"
 
+wireguard_interface: wg0
+wireguard_port: 51820
+wireguard_network: 10.66.66.0/24
+wireguard_server_address: 10.66.66.1/24
+
+wireguard_peers:
+  - name: pr819
+    public_key: "{{ vault_wireguard_pr819_public_key }}"
+    address: 10.66.66.2/32
+
 data_mount_path: /mnt/data
 data_filesystem_type: ext4
 data_filesystem_label: data-new

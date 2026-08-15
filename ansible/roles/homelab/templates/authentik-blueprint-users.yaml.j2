@@ -35,3 +35,19 @@ entries:
       username: akadmin
     attrs:
       email: ""
+
+  - model: authentik_core.group
+    id: grafana-users
+    state: present
+    identifiers:
+      name: grafana-users
+    attrs:
+      name: grafana-users
+
+  - model: authentik_core.group
+    id: portainer-users
+    state: present
+    identifiers:
+      name: portainer-users
+    attrs:
+      name: portainer-users

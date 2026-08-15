@@ -52,3 +52,23 @@ entries:
       slug: portainer
       provider: !KeyOf portainer-provider
       meta_launch_url: "{{ portainer_url }}"
+
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf portainer-application
+      order: 10
+    attrs:
+      group: !Find
+        - authentik_core.group
+        - [name, Homelab Admins]
+
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf portainer-application
+      order: 20
+    attrs:
+      group: !Find
+        - authentik_core.group
+        - [name, portainer-users]

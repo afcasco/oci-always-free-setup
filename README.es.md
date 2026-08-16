@@ -1,4 +1,4 @@
-[English](README.md) | [Español](README.es.md)
+[English](README.md) | [Español](README.es.md) | [Guía rápida](QUICKSTART.es.md)
 
 # OCI Homelab
 
@@ -27,7 +27,8 @@ Ciclo de despliegue:
 
 ```text
 Bootstrap estado Terraform → Terraform OCI → inventario bootstrap
-→ Ansible bootstrap → inventario producción → Ansible site
+→ Ansible bootstrap → inventario temporal de producción → Ansible site
+→ WireGuard → inventario de producción
 ```
 
 ## Estructura del repositorio
@@ -74,9 +75,13 @@ instance_name           = "homelab"
 instance_image_ocid     = "ocid1.image.oc1.eu-madrid-1.example"
 instance_private_ip     = "10.0.0.137"
 ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
+bootstrap_ssh_cidr      = "203.0.113.10/32"
 ```
 
-No subir archivos `terraform.tfvars` reales a Git.
+`bootstrap_ssh_cidr` es tu IP pública actual con `/32`. Permite SSH público
+temporalmente para que el primer playbook de producción pueda instalar
+WireGuard. No subir archivos `terraform.tfvars` reales a Git y eliminar este
+valor después de pasar a WireGuard.
 
 ## Ansible
 
@@ -102,9 +107,12 @@ vault_portainer_oidc_client_secret: "..."
 vault_authentik_primary_user_password: "..."
 vault_authentik_pg_pass: "..."
 vault_authentik_secret_key: "..."
+vault_wireguard_server_private_key: "..."
+vault_wireguard_pr819_public_key: "..."
 ```
 
-Usar valores aleatorios robustos. Las tareas que renderizan secretos usan
+El nombre de la variable del peer de WireGuard debe coincidir con el peer de
+`vars.yml`. Usar valores aleatorios robustos. Las tareas que renderizan secretos usan
 `no_log: true`; las nuevas plantillas deben hacer lo mismo.
 
 # Despliegue desde cero
@@ -154,11 +162,11 @@ ansible-playbook   -i inventory/bootstrap.yml   playbooks/bootstrap.yml
 
 Esto crea el administrador permanente y configura SSH.
 
-## 4. Desplegar el homelab
+## 4. Primer despliegue de producción
 
 ```bash
 cd ..
-./scripts/generate-ansible-inventory.sh production
+./scripts/generate-ansible-inventory.sh production-bootstrap
 cd ansible
 ```
 
@@ -175,6 +183,28 @@ ansible-playbook   -i inventory/production.yml   playbooks/site.yml   --ask-vaul
 ```
 
 `data_disk_initialize=true` autoriza explícitamente particionar y formatear un disco vacío. Ansible rechaza inicializar discos con particiones o firmas existentes.
+
+Esta primera ejecución sigue usando SSH público e instala el servidor WireGuard.
+
+## 5. Pasar a la gestión solo por WireGuard
+
+Configurar el cliente WireGuard que corresponde a una entrada de
+`wireguard_peers` y comprobar que puede llegar a `10.66.66.1`. El cliente usa
+su propia clave privada, la clave pública del servidor, la IPv4 pública
+reservada como endpoint en el puerto UDP `51820` y `10.66.66.0/24` como rango
+de IPs permitidas.
+
+Cuando SSH por VPN funcione, generar el inventario normal; todas las siguientes
+ejecuciones de Ansible usan la dirección de WireGuard:
+
+```bash
+cd ..
+./scripts/generate-ansible-inventory.sh production
+```
+
+Por último, eliminar `bootstrap_ssh_cidr` de
+`terraform/oci/terraform.tfvars` y ejecutar `terraform apply` para cerrar el
+SSH público.
 
 # Recursos persistentes y almacenamiento
 
@@ -252,7 +282,7 @@ worker Authentik      r-x directorio / r-- archivos
 otros usuarios        sin acceso
 ```
 
-Ansible rechaza configuraciones que habiliten Portainer o Monitoring mientras Authentik esté deshabilitado.
+Ansible rechaza configuraciones que habiliten Portainer, Monitoring o Uptime Kuma mientras Authentik esté deshabilitado.
 
 # Validación y operación normal
 
@@ -287,9 +317,9 @@ El flujo normal para actualizar un stack es modificar el repositorio, previsuali
 La instancia se puede recrear conservando el volumen OCI y la IP reservada protegidos:
 
 1. Recrear el cómputo con Terraform.
-2. Generar el inventario bootstrap y ejecutar `bootstrap.yml`.
-3. Generar el inventario de producción y ejecutar `site.yml`.
-4. Reutilizar el volumen persistente y reconciliar los stacks.
+2. Definir `bootstrap_ssh_cidr`, generar el inventario bootstrap y ejecutar `bootstrap.yml`.
+3. Usar el inventario `production-bootstrap` para ejecutar `site.yml` y luego pasar a WireGuard.
+4. Eliminar `bootstrap_ssh_cidr`, reutilizar el volumen persistente y reconciliar los stacks.
 
 La recuperación de aplicaciones sigue dependiendo de la integridad y las copias de seguridad de sus datos persistentes.
 

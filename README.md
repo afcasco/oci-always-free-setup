@@ -1,4 +1,4 @@
-[English](README.md) | [Español](README.es.md)
+[English](README.md) | [Español](README.es.md) | [Quickstart](QUICKSTART.md)
 
 # OCI Homelab
 
@@ -26,7 +26,8 @@ The deployment lifecycle is:
 
 ```text
 Terraform state bootstrap → Terraform OCI → bootstrap inventory
-→ Ansible bootstrap → production inventory → Ansible site playbook
+→ Ansible bootstrap → temporary production inventory → Ansible site playbook
+→ WireGuard → production inventory
 ```
 
 ## Repository layout
@@ -73,9 +74,13 @@ instance_name           = "homelab"
 instance_image_ocid     = "ocid1.image.oc1.eu-madrid-1.example"
 instance_private_ip     = "10.0.0.137"
 ssh_public_key          = "ssh-ed25519 AAAA... oci-homelab"
+bootstrap_ssh_cidr      = "203.0.113.10/32"
 ```
 
-Keep real `terraform.tfvars` files out of Git.
+`bootstrap_ssh_cidr` is your current public IP with `/32`. It temporarily
+allows public SSH so the first production playbook can install WireGuard. Keep
+real `terraform.tfvars` files out of Git, and remove this value after the
+WireGuard handover.
 
 ## Ansible
 
@@ -101,8 +106,11 @@ vault_portainer_oidc_client_secret: "..."
 vault_authentik_primary_user_password: "..."
 vault_authentik_pg_pass: "..."
 vault_authentik_secret_key: "..."
+vault_wireguard_server_private_key: "..."
+vault_wireguard_pr819_public_key: "..."
 ```
 
+The WireGuard peer variable name must match the peer configured in `vars.yml`.
 Use strong randomly generated values. Secret-bearing templates use `no_log: true`; new ones should do the same.
 
 # Fresh deployment
@@ -152,11 +160,11 @@ ansible-playbook   -i inventory/bootstrap.yml   playbooks/bootstrap.yml
 
 This creates the permanent administrator and configures SSH.
 
-## 4. Deploy the homelab
+## 4. First production deployment
 
 ```bash
 cd ..
-./scripts/generate-ansible-inventory.sh production
+./scripts/generate-ansible-inventory.sh production-bootstrap
 cd ansible
 ```
 
@@ -173,6 +181,26 @@ ansible-playbook   -i inventory/production.yml   playbooks/site.yml   --ask-vaul
 ```
 
 `data_disk_initialize=true` explicitly authorizes partitioning and formatting a blank disk. Ansible refuses to initialize disks containing existing partitions or signatures.
+
+This first run still uses public SSH and installs the WireGuard server.
+
+## 5. Switch to WireGuard-only management
+
+Configure the WireGuard client that corresponds to an entry in
+`wireguard_peers`, then verify that it can reach `10.66.66.1`. The client uses
+its own private key, the server public key, the reserved public IPv4 as the
+endpoint on UDP port `51820`, and `10.66.66.0/24` as its allowed IP range.
+
+Once VPN SSH works, generate the normal inventory; all later Ansible runs use
+the WireGuard address:
+
+```bash
+cd ..
+./scripts/generate-ansible-inventory.sh production
+```
+
+Finally, remove `bootstrap_ssh_cidr` from `terraform/oci/terraform.tfvars` and
+run `terraform apply` to close public SSH.
 
 # Persistent resources and storage
 
@@ -250,7 +278,7 @@ Authentik worker    r-x directory / r-- files
 other users         no access
 ```
 
-Ansible rejects configurations that enable Portainer or Monitoring while Authentik is disabled.
+Ansible rejects configurations that enable Portainer, Monitoring, or Uptime Kuma while Authentik is disabled.
 
 # Validation and normal operation
 
@@ -285,9 +313,9 @@ A normal stack update is: change the repository configuration, preview it, recon
 The compute instance can be recreated while retaining the protected OCI data volume and reserved IP:
 
 1. Recreate the compute infrastructure with Terraform.
-2. Generate the bootstrap inventory and run `bootstrap.yml`.
-3. Generate the production inventory and run `site.yml`.
-4. Reuse the persistent volume and reconcile the stacks.
+2. Set `bootstrap_ssh_cidr`, generate the bootstrap inventory and run `bootstrap.yml`.
+3. Use the `production-bootstrap` inventory to run `site.yml`, then switch to WireGuard.
+4. Remove `bootstrap_ssh_cidr`, reuse the persistent volume and reconcile the stacks.
 
 Application recovery still depends on the integrity and backups of persistent application data.
 

@@ -12,36 +12,34 @@
   changed_when: false
   check_mode: false
 
-- name: List physical disks
-  ansible.builtin.command:
-    cmd: lsblk -dn -o PATH,TYPE
-  register: physical_disks
+- name: Wait for non-root data disk to appear
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    root_disk="/dev/{{ root_disk_name.stdout | trim }}"
+
+    lsblk -dn -o PATH,TYPE \
+      | awk -v root="$root_disk" '$2 == "disk" && $1 != root { print $1 }'
+  args:
+    executable: /bin/bash
+  register: data_disk_wait
   changed_when: false
   check_mode: false
-
-- name: Determine non-root disk candidates
-  ansible.builtin.set_fact:
-    data_disk_candidates: >-
-      {{
-        physical_disks.stdout_lines
-        | select('search', '\s+disk\s*$')
-        | map('regex_replace', '\s+disk\s*$', '')
-        | map('trim')
-        | reject('equalto', '/dev/' ~ (root_disk_name.stdout | trim))
-        | list
-      }}
+  retries: 30
+  delay: 2
+  until: data_disk_wait.stdout_lines | length > 0
 
 - name: Ensure exactly one non-root disk exists
   ansible.builtin.assert:
     that:
-      - data_disk_candidates | length == 1
+      - data_disk_wait.stdout_lines | length == 1
     fail_msg: >-
       Expected exactly one non-root disk, found:
-      {{ data_disk_candidates }}
+      {{ data_disk_wait.stdout_lines }}
 
 - name: Set detected data disk
   ansible.builtin.set_fact:
-    data_disk: "{{ data_disk_candidates[0] }}"
+    data_disk: "{{ data_disk_wait.stdout_lines[0] }}"
 
 - name: Check whether data disk has partitions
   ansible.builtin.command:
@@ -126,13 +124,13 @@
 - name: Show detected data disk
   ansible.builtin.debug:
     msg:
-      - "Root disk: /dev/{{ root_disk_name.stdout }}"
+      - "Root disk: /dev/{{ root_disk_name.stdout | trim }}"
       - "Data disk: {{ data_disk }}"
       - "{{ data_disk_info.stdout_lines }}"
 
 - name: Find filesystem by label
   ansible.builtin.command:
-    cmd: blkid -L {{ data_filesystem_label }}
+    cmd: "blkid -L {{ data_filesystem_label }}"
   register: data_device
   changed_when: false
   check_mode: false
@@ -145,7 +143,7 @@
 
 - name: Read filesystem UUID
   ansible.builtin.command:
-    cmd: blkid -s UUID -o value {{ data_device.stdout }}
+    cmd: "blkid -s UUID -o value {{ data_device.stdout }}"
   register: data_uuid
   changed_when: false
   check_mode: false

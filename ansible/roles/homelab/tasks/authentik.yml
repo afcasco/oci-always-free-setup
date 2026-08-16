@@ -196,3 +196,17 @@
     project_src: /opt/stacks/authentik
     state: present
   when: "'authentik' in enabled_stacks"
+
+- name: Wait for Authentik API
+  ansible.builtin.uri:
+    url: "{{ authentik_url }}/-/health/ready/"
+    method: GET
+    status_code: 200
+    validate_certs: true
+  register: authentik_ready
+  retries: 40
+  delay: 3
+  until: authentik_ready.status == 200
+  when:
+    - "'authentik' in enabled_stacks"
+    - not ansible_check_mode

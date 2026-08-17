@@ -1,0 +1,34 @@
+- name: Ensure Paperless stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/paperless
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'paperless' in enabled_stacks"
+
+- name: Synchronize Paperless stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/paperless/"
+    dest: /opt/stacks/paperless/
+    archive: true
+    delete: true
+    rsync_opts: "{{ stack_sync_rsync_opts }}"
+  become: false
+  when: "'paperless' in enabled_stacks"
+
+- name: Ensure Paperless environment file is configured
+  ansible.builtin.template:
+    src: paperless.env.j2
+    dest: /opt/stacks/paperless/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  no_log: true
+  when: "'paperless' in enabled_stacks"
+
+- name: Ensure Paperless stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/paperless
+    state: present
+  when: "'paperless' in enabled_stacks"

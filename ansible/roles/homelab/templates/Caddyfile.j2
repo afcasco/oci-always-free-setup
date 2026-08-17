@@ -16,9 +16,11 @@ www.{{ homelab_domain }} {
     redir https://{{ homelab_domain }}{uri} permanent
 }
 
-n8n.{{ homelab_domain }} {
+{% if 'n8n' in enabled_stacks %}
+    n8n.{{ homelab_domain }} {
     reverse_proxy n8n:5678
-}
+    }
+{% endif %}
 
 portainer.{{ homelab_domain }} {
     reverse_proxy portainer:9000

@@ -1,6 +1,7 @@
 homelab_domain: afcasco.dev
 server_hostname: gizmo
 server_timezone: Etc/UTC
+paperless_timezone: Europe/Madrid
 
 base_packages:
   - ca-certificates
@@ -57,6 +58,9 @@ managed_stacks:
   - uptime-kuma
   - monitoring
   - authentik
+  - n8n
+  - stirling-pdf
+  - paperless
 
 enabled_stacks:
   - caddy
@@ -64,6 +68,9 @@ enabled_stacks:
   - uptime-kuma
   - monitoring
   - authentik
+  - n8n
+  - stirling-pdf
+  - paperless
 
 caddy_bind_ip: 10.0.0.137
 
@@ -88,6 +95,22 @@ authentik_pg_db: authentik
 authentik_pg_user: authentik
 authentik_pg_pass: "{{ vault_authentik_pg_pass }}"
 authentik_secret_key: "{{ vault_authentik_secret_key }}"
+
+n8n_url: "https://n8n.{{ homelab_domain }}"
+n8n_encryption_key: "{{ vault_n8n_encryption_key }}"
+
+stirling_pdf_url: "https://pdf.{{ homelab_domain }}"
+stirling_admin_user: "{{ vault_stirling_admin_user }}"
+stirling_admin_password: "{{ vault_stirling_admin_password }}"
+
+stirling_oidc_client_id: stirling-pdf
+stirling_oidc_client_secret: "{{ vault_stirling_oidc_client_secret }}"
+
+paperless_db_password: "{{ vault_paperless_db_password }}"
+paperless_secret_key: "{{ vault_paperless_secret_key }}"
+paperless_admin_user: "{{ vault_paperless_admin_user }}"
+paperless_admin_password: "{{ vault_paperless_admin_password }}"
+paperless_url: "https://paperless.{{ homelab_domain }}"
 
 persistent_directories:
   - path: /mnt/data/docker/caddy/data
@@ -144,3 +167,73 @@ persistent_directories:
     owner: 1000
     group: 1000
     mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf/configs
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf/logs
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf/pipeline
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf/customFiles
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/stirling-pdf/tessdata
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/paperless
+    owner: 0
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/paperless/postgres
+    owner: 999
+    group: 1002
+    mode: "0700"
+
+  - path: /mnt/data/docker/paperless/data
+    owner: 1000
+    group: 1000
+    mode: "0775"
+
+  - path: /mnt/data/docker/paperless/data/redis
+    owner: 999
+    group: 0
+    mode: "0755"
+
+  - path: /mnt/data/docker/paperless/data/paperless
+    owner: 1000
+    group: 1000
+    mode: "0755"
+
+  - path: /mnt/data/docker/paperless/media
+    owner: 1000
+    group: 1000
+    mode: "0775"
+
+  - path: /mnt/data/docker/paperless/export
+    owner: 1000
+    group: 1000
+    mode: "0775"
+
+  - path: /mnt/data/docker/paperless/consume
+    owner: 1000
+    group: 1000
+    mode: "0775"

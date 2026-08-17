@@ -46,6 +46,21 @@
   tags:
     - authentik
 
+- name: Reconcile n8n configuration
+  ansible.builtin.import_tasks: n8n.yml
+  tags:
+    - n8n
+
+- name: Reconcile Stirling PDF configuration
+  ansible.builtin.import_tasks: stirling-pdf.yml
+  tags:
+    - stirling-pdf
+
+- name: Reconcile Paperless configuration
+  ansible.builtin.import_tasks: paperless.yml
+  tags:
+    - paperless
+
 - name: Reconcile Monitoring configuration
   ansible.builtin.import_tasks: monitoring.yml
   tags:

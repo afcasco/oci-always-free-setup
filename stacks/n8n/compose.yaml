@@ -5,13 +5,13 @@ services:
     restart: unless-stopped
 
     environment:
-      - N8N_HOST=n8n.afcasco.dev
+      - N8N_HOST=n8n.${HOMELAB_DOMAIN}
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=https://n8n.afcasco.dev/
+      - WEBHOOK_URL=https://n8n.${HOMELAB_DOMAIN}/
       - N8N_PROXY_HOPS=1
-      - GENERIC_TIMEZONE=Europe/Madrid
-      - TZ=Europe/Madrid
+      - GENERIC_TIMEZONE=${SERVER_TIMEZONE}
+      - TZ=${SERVER_TIMEZONE}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 
     volumes:

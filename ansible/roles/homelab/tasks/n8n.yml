@@ -1,0 +1,34 @@
+- name: Ensure n8n stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/n8n
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'n8n' in enabled_stacks"
+
+- name: Synchronize n8n stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/n8n/"
+    dest: /opt/stacks/n8n/
+    archive: true
+    delete: true
+    rsync_opts: "{{ stack_sync_rsync_opts }}"
+  become: false
+  when: "'n8n' in enabled_stacks"
+
+- name: Ensure n8n environment file is configured
+  ansible.builtin.template:
+    src: n8n.env.j2
+    dest: /opt/stacks/n8n/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  no_log: true
+  when: "'n8n' in enabled_stacks"
+
+- name: Ensure n8n stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/n8n
+    state: present
+  when: "'n8n' in enabled_stacks"

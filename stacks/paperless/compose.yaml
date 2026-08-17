@@ -21,7 +21,7 @@ services:
       - /mnt/data/docker/paperless/postgres:/var/lib/postgresql/data
 
   webserver:
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
     container_name: paperless
     restart: unless-stopped
 
@@ -38,8 +38,8 @@ services:
       PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
 
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
-      PAPERLESS_URL: https://paperless.afcasco.dev
-      PAPERLESS_TIME_ZONE: Europe/Madrid
+      PAPERLESS_URL: https://paperless.${HOMELAB_DOMAIN}
+      PAPERLESS_TIME_ZONE: ${PAPERLESS_TIMEZONE}
 
       PAPERLESS_OCR_LANGUAGE: spa+cat+eng
       PAPERLESS_OCR_LANGUAGES: spa cat

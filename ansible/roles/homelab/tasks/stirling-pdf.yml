@@ -1,0 +1,152 @@
+- name: Ensure Stirling PDF stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks/stirling-pdf
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: "'stirling-pdf' in enabled_stacks"
+
+- name: Synchronize Stirling PDF stack configuration
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/stirling-pdf/"
+    dest: /opt/stacks/stirling-pdf/
+    archive: true
+    delete: true
+    rsync_opts: "{{ stack_sync_rsync_opts }}"
+  become: false
+  when: "'stirling-pdf' in enabled_stacks"
+
+- name: Ensure Stirling PDF environment file is configured
+  ansible.builtin.template:
+    src: stirling-pdf.env.j2
+    dest: /opt/stacks/stirling-pdf/.env
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  no_log: true
+  when: "'stirling-pdf' in enabled_stacks"
+
+#
+# Stirling PDF Authentik blueprint
+#
+
+- name: Ensure Authentik blueprint directory access for Stirling PDF
+  ansible.builtin.import_tasks: authentik-blueprint-dir.yml
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik blueprint staging directory exists for Stirling PDF
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/.blueprint-staging
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Render Stirling PDF Authentik blueprint to staging
+  ansible.builtin.template:
+    src: authentik-blueprint-stirling-pdf.yaml.j2
+    dest: /opt/stacks/authentik/.blueprint-staging/stirling-pdf.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0640"
+  no_log: true
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read staged Stirling PDF blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/stirling-pdf.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged Stirling PDF blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/stirling-pdf.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged Stirling PDF blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/stirling-pdf.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Wait for Stirling PDF Authentik group
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - authentik-postgresql-1
+      - psql
+      - -U
+      - authentik
+      - -d
+      - authentik
+      - -tAc
+      - "SELECT 1 FROM authentik_core_group WHERE name = 'stirling-pdf-users';"
+  register: stirling_pdf_authentik_group
+  changed_when: false
+  retries: 20
+  delay: 2
+  until: stirling_pdf_authentik_group.stdout | trim == "1"
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+    - not ansible_check_mode
+
+- name: Publish Stirling PDF Authentik blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/stirling-pdf.yaml"
+    dst="/opt/stacks/authentik/blueprints/stirling-pdf.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/stirling-pdf.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_stirling_pdf_blueprint_publish
+  changed_when: "'changed' in authentik_stirling_pdf_blueprint_publish.stdout"
+  no_log: true
+  when:
+    - "'stirling-pdf' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Ensure Stirling PDF stack is running
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks/stirling-pdf
+    state: present
+  when: "'stirling-pdf' in enabled_stacks"

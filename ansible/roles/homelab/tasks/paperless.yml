@@ -27,6 +27,124 @@
   no_log: true
   when: "'paperless' in enabled_stacks"
 
+#
+# Paperless Authentik blueprint
+#
+
+- name: Ensure Authentik blueprint directory access for Paperless
+  ansible.builtin.import_tasks: authentik-blueprint-dir.yml
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Ensure Authentik blueprint staging directory exists for Paperless
+  ansible.builtin.file:
+    path: /opt/stacks/authentik/.blueprint-staging
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Render Paperless Authentik blueprint to staging
+  ansible.builtin.template:
+    src: authentik-blueprint-paperless.yaml.j2
+    dest: /opt/stacks/authentik/.blueprint-staging/paperless.yaml
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0640"
+  no_log: true
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Allow Authentik worker to read staged Paperless blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/paperless.yaml
+    entity: "1000"
+    etype: user
+    permissions: "r"
+    state: present
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny group access to staged Paperless blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/paperless.yaml
+    etype: group
+    permissions: "---"
+    state: present
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Deny other access to staged Paperless blueprint
+  ansible.posix.acl:
+    path: /opt/stacks/authentik/.blueprint-staging/paperless.yaml
+    etype: other
+    permissions: "---"
+    state: present
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
+- name: Wait for Paperless Authentik group
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - authentik-postgresql-1
+      - psql
+      - -U
+      - authentik
+      - -d
+      - authentik
+      - -tAc
+      - "SELECT 1 FROM authentik_core_group WHERE name = 'paperless-users';"
+  register: paperless_authentik_group
+  changed_when: false
+  retries: 20
+  delay: 2
+  until: paperless_authentik_group.stdout | trim == "1"
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+    - not ansible_check_mode
+
+- name: Publish Paperless Authentik blueprint atomically
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    src="/opt/stacks/authentik/.blueprint-staging/paperless.yaml"
+    dst="/opt/stacks/authentik/blueprints/paperless.yaml"
+    tmp="/opt/stacks/authentik/.blueprint-staging/paperless.publish.yaml"
+
+    needs_publish=true
+
+    if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+      if [ "$(stat -c '%u:%g' "$src")" = "$(stat -c '%u:%g' "$dst")" ] && \
+         [ "$(getfacl -cp "$src")" = "$(getfacl -cp "$dst")" ]; then
+        needs_publish=false
+      fi
+    fi
+
+    if [ "$needs_publish" = true ]; then
+      cp --preserve=all "$src" "$tmp"
+      mv -f "$tmp" "$dst"
+      echo changed
+    fi
+  args:
+    executable: /bin/bash
+  register: authentik_paperless_blueprint_publish
+  changed_when: "'changed' in authentik_paperless_blueprint_publish.stdout"
+  no_log: true
+  when:
+    - "'paperless' in enabled_stacks"
+    - "'authentik' in enabled_stacks"
+
 - name: Ensure Paperless stack is running
   community.docker.docker_compose_v2:
     project_src: /opt/stacks/paperless

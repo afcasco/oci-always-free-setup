@@ -50,6 +50,11 @@ services:
       PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
       PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
 
+      PAPERLESS_APPS: ${PAPERLESS_APPS}
+      PAPERLESS_SOCIALACCOUNT_PROVIDERS: ${PAPERLESS_SOCIALACCOUNT_PROVIDERS}
+
+      PAPERLESS_DISABLE_REGULAR_LOGIN: ${PAPERLESS_DISABLE_REGULAR_LOGIN}
+
     volumes:
       - /mnt/data/docker/paperless/data/paperless:/usr/src/paperless/data
       - /mnt/data/docker/paperless/media:/usr/src/paperless/media

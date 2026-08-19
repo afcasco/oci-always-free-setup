@@ -9,7 +9,8 @@ para poder reconstruir el servidor sin perder los datos de aplicaciones en
 - **Terraform** aprovisiona red, cómputo, IP pública reservada y almacenamiento persistente.
 - **Ansible** prepara el host y reconcilia los stacks Docker Compose gestionados.
 - **Caddy** proporciona HTTPS y proxy inverso.
-- **Authentik** proporciona autenticación centralizada para Grafana y Portainer.
+- **Authentik** proporciona autenticación centralizada para Grafana, Portainer,
+  Uptime Kuma, Stirling PDF y Paperless.
 
 ## Arquitectura
 
@@ -107,6 +108,15 @@ vault_portainer_oidc_client_secret: "..."
 vault_authentik_primary_user_password: "..."
 vault_authentik_pg_pass: "..."
 vault_authentik_secret_key: "..."
+vault_n8n_encryption_key: "..."
+vault_stirling_admin_user: "..."
+vault_stirling_admin_password: "..."
+vault_stirling_oidc_client_secret: "..."
+vault_paperless_db_password: "..."
+vault_paperless_secret_key: "..."
+vault_paperless_admin_user: "..."
+vault_paperless_admin_password: "..."
+vault_paperless_oidc_client_secret: "..."
 vault_wireguard_server_private_key: "..."
 vault_wireguard_pr819_public_key: "..."
 ```
@@ -227,7 +237,8 @@ cd ansible
 ansible-playbook   -i inventory/production.yml   playbooks/site.yml   --tags authentik   --ask-vault-pass
 ```
 
-Las etiquetas actuales incluyen `caddy`, `authentik`, `monitoring`, `portainer` y `uptime-kuma`.
+Las etiquetas actuales incluyen `caddy`, `authentik`, `monitoring`, `portainer`,
+`uptime-kuma`, `n8n`, `stirling-pdf` y `paperless`.
 
 La configuración se sincroniza desde `stacks/<stack>/` hacia `/opt/stacks/<stack>/`. El estado de ejecución debe quedar fuera de las rutas sincronizadas salvo exclusión explícita. Los `.env` se generan mediante Ansible y no deben mantenerse manualmente.
 
@@ -252,21 +263,25 @@ El comodín no cubre el dominio raíz. Caddy obtiene y renueva los certificados 
 | --- | --- |
 | `{{ homelab_domain }}` | `apache:80` |
 | `www.{{ homelab_domain }}` | Redirección al dominio raíz |
-| `n8n.{{ homelab_domain }}` | `n8n:5678` |
-| `portainer.{{ homelab_domain }}` | `portainer:9000` |
-| `status.{{ homelab_domain }}` | `uptime-kuma:3001` |
-| `paperless.{{ homelab_domain }}` | `paperless:8000` |
-| `pdf.{{ homelab_domain }}` | `stirling-pdf:8080` |
+| `n8n.{{ homelab_domain }}` | `n8n:5678` (si `n8n` está habilitado) |
+| `portainer.{{ homelab_domain }}` | `portainer:9000` (si `portainer` está habilitado) |
+| `status.{{ homelab_domain }}` | `uptime-kuma:3001` (si `uptime-kuma` está habilitado) |
+| `paperless.{{ homelab_domain }}` | `paperless:8000` (si `paperless` está habilitado) |
+| `pdf.{{ homelab_domain }}` | `stirling-pdf:8080` (si `stirling-pdf` está habilitado) |
 | `airflow.{{ homelab_domain }}` | `airflow-api-server:8080` |
-| `grafana.{{ homelab_domain }}` | `grafana:3000` |
-| `auth.{{ homelab_domain }}` | `authentik-server:9000` |
+| `grafana.{{ homelab_domain }}` | `grafana:3000` (si `monitoring` está habilitado) |
+| `auth.{{ homelab_domain }}` | `authentik-server:9000` (si `authentik` está habilitado) |
 
-Una ruta puede existir aunque su backend no esté gestionado o esté
-deshabilitado; el proxy fallará hasta que el backend esté disponible.
+Las rutas del dominio raíz y de Airflow apuntan a backends no gestionados.
+Desplegar Apache y Airflow por separado, o eliminar esas rutas antes de un
+despliegue desde cero; en caso contrario devolverán un error de proxy.
 
 # Autenticación
 
-Authentik proporciona autenticación centralizada para Grafana y Portainer. Sus proveedores y aplicaciones se gestionan mediante Blueprints renderizados por Ansible con secretos procedentes del Vault.
+Authentik proporciona autenticación centralizada para Grafana, Portainer,
+Uptime Kuma, Stirling PDF y Paperless. Sus proveedores y aplicaciones se
+gestionan mediante Blueprints renderizados por Ansible con secretos procedentes
+del Vault.
 
 Los Blueprints renderizados viven en:
 
@@ -282,7 +297,8 @@ worker Authentik      r-x directorio / r-- archivos
 otros usuarios        sin acceso
 ```
 
-Ansible rechaza configuraciones que habiliten Portainer, Monitoring o Uptime Kuma mientras Authentik esté deshabilitado.
+Ansible rechaza configuraciones que habiliten Portainer, Monitoring, Uptime
+Kuma, Stirling PDF o Paperless mientras Authentik esté deshabilitado.
 
 # Validación y operación normal
 

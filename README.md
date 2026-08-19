@@ -8,7 +8,8 @@ rebuild the server without losing the application data on `/mnt/data`.
 - **Terraform** provisions OCI networking, compute, reserved public IP and persistent storage.
 - **Ansible** bootstraps the host and reconciles managed Docker Compose stacks.
 - **Caddy** provides HTTPS and reverse proxying.
-- **Authentik** provides centralized authentication for Grafana and Portainer.
+- **Authentik** provides centralized authentication for Grafana, Portainer,
+  Uptime Kuma, Stirling PDF and Paperless.
 
 ## Architecture
 
@@ -106,6 +107,15 @@ vault_portainer_oidc_client_secret: "..."
 vault_authentik_primary_user_password: "..."
 vault_authentik_pg_pass: "..."
 vault_authentik_secret_key: "..."
+vault_n8n_encryption_key: "..."
+vault_stirling_admin_user: "..."
+vault_stirling_admin_password: "..."
+vault_stirling_oidc_client_secret: "..."
+vault_paperless_db_password: "..."
+vault_paperless_secret_key: "..."
+vault_paperless_admin_user: "..."
+vault_paperless_admin_password: "..."
+vault_paperless_oidc_client_secret: "..."
 vault_wireguard_server_private_key: "..."
 vault_wireguard_pr819_public_key: "..."
 ```
@@ -223,7 +233,8 @@ cd ansible
 ansible-playbook   -i inventory/production.yml   playbooks/site.yml   --tags authentik   --ask-vault-pass
 ```
 
-Current tags include `caddy`, `authentik`, `monitoring`, `portainer` and `uptime-kuma`.
+Current tags include `caddy`, `authentik`, `monitoring`, `portainer`,
+`uptime-kuma`, `n8n`, `stirling-pdf` and `paperless`.
 
 Configuration is synchronized from `stacks/<stack>/` to `/opt/stacks/<stack>/`. Runtime state must therefore live outside synchronized paths unless explicitly excluded. Runtime `.env` files are rendered by Ansible and must not be maintained manually.
 
@@ -248,21 +259,25 @@ The wildcard does not cover the apex domain. Caddy obtains and renews public TLS
 | --- | --- |
 | `{{ homelab_domain }}` | `apache:80` |
 | `www.{{ homelab_domain }}` | Redirects to the apex domain |
-| `n8n.{{ homelab_domain }}` | `n8n:5678` |
-| `portainer.{{ homelab_domain }}` | `portainer:9000` |
-| `status.{{ homelab_domain }}` | `uptime-kuma:3001` |
-| `paperless.{{ homelab_domain }}` | `paperless:8000` |
-| `pdf.{{ homelab_domain }}` | `stirling-pdf:8080` |
+| `n8n.{{ homelab_domain }}` | `n8n:5678` (when `n8n` is enabled) |
+| `portainer.{{ homelab_domain }}` | `portainer:9000` (when `portainer` is enabled) |
+| `status.{{ homelab_domain }}` | `uptime-kuma:3001` (when `uptime-kuma` is enabled) |
+| `paperless.{{ homelab_domain }}` | `paperless:8000` (when `paperless` is enabled) |
+| `pdf.{{ homelab_domain }}` | `stirling-pdf:8080` (when `stirling-pdf` is enabled) |
 | `airflow.{{ homelab_domain }}` | `airflow-api-server:8080` |
-| `grafana.{{ homelab_domain }}` | `grafana:3000` |
-| `auth.{{ homelab_domain }}` | `authentik-server:9000` |
+| `grafana.{{ homelab_domain }}` | `grafana:3000` (when `monitoring` is enabled) |
+| `auth.{{ homelab_domain }}` | `authentik-server:9000` (when `authentik` is enabled) |
 
-A configured route can exist while its backend is unmanaged or disabled; it
-will fail to proxy until that backend is available.
+The apex and Airflow routes target unmanaged backends. Deploy Apache and
+Airflow separately, or remove those routes before a fresh deployment; they
+will otherwise return a proxy error.
 
 # Authentication
 
-Authentik provides centralized authentication for Grafana and Portainer. Their providers/applications are managed through Authentik Blueprints rendered by Ansible with secrets sourced from Vault.
+Authentik provides centralized authentication for Grafana, Portainer, Uptime
+Kuma, Stirling PDF and Paperless. Their providers/applications are managed
+through Authentik Blueprints rendered by Ansible with secrets sourced from
+Vault.
 
 Rendered Blueprints live under:
 
@@ -278,7 +293,8 @@ Authentik worker    r-x directory / r-- files
 other users         no access
 ```
 
-Ansible rejects configurations that enable Portainer, Monitoring, or Uptime Kuma while Authentik is disabled.
+Ansible rejects configurations that enable Portainer, Monitoring, Uptime Kuma,
+Stirling PDF or Paperless while Authentik is disabled.
 
 # Validation and normal operation
 

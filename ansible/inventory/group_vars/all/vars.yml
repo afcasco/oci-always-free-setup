@@ -240,3 +240,8 @@ persistent_directories:
     owner: 1000
     group: 1000
     mode: "0775"
+
+  - path: /mnt/data/docker/n8n
+    owner: 1000
+    group: 1000
+    mode: "0755"

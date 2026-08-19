@@ -36,7 +36,8 @@
             '--exclude=blueprints/authentication.yaml',
             '--exclude=.blueprint-staging/',
             '--exclude=blueprints/uptime-kuma.yaml',
-            '--exclude=blueprints/stirling-pdf.yaml'
+            '--exclude=blueprints/stirling-pdf.yaml',
+            '--exclude=blueprints/paperless.yaml'
           ]
       }}
   become: false

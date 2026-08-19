@@ -17,58 +17,70 @@ www.{{ homelab_domain }} {
 }
 
 {% if 'n8n' in enabled_stacks %}
-    n8n.{{ homelab_domain }} {
+n8n.{{ homelab_domain }} {
     reverse_proxy n8n:5678
-    }
+}
 {% endif %}
 
+{% if 'portainer' in enabled_stacks %}
 portainer.{{ homelab_domain }} {
     reverse_proxy portainer:9000
 }
+{% endif %}
 
+{% if 'uptime-kuma' in enabled_stacks %}
 status.{{ homelab_domain }} {
     route {
         reverse_proxy /outpost.goauthentik.io/* authentik-server:9000
 
         forward_auth authentik-server:9000 {
-        uri /outpost.goauthentik.io/auth/caddy
+            uri /outpost.goauthentik.io/auth/caddy
 
-        copy_headers {
-            X-Authentik-Username
-            X-Authentik-Groups
-            X-Authentik-Entitlements
-            X-Authentik-Email
-            X-Authentik-Name
-            X-Authentik-Uid
-            X-Authentik-Jwt
-            X-Authentik-Meta-Jwks
-            X-Authentik-Meta-Outpost
-            X-Authentik-Meta-Provider
-            X-Authentik-Meta-App
-            X-Authentik-Meta-Version
+            copy_headers {
+                X-Authentik-Username
+                X-Authentik-Groups
+                X-Authentik-Entitlements
+                X-Authentik-Email
+                X-Authentik-Name
+                X-Authentik-Uid
+                X-Authentik-Jwt
+                X-Authentik-Meta-Jwks
+                X-Authentik-Meta-Outpost
+                X-Authentik-Meta-Provider
+                X-Authentik-Meta-App
+                X-Authentik-Meta-Version
+            }
         }
-    }
 
-    reverse_proxy uptime-kuma:3001
+        reverse_proxy uptime-kuma:3001
     }
 }
+{% endif %}
 
+{% if 'paperless' in enabled_stacks %}
 paperless.{{ homelab_domain }} {
     reverse_proxy paperless:8000
 }
+{% endif %}
 
+{% if 'stirling-pdf' in enabled_stacks %}
 pdf.{{ homelab_domain }} {
     reverse_proxy stirling-pdf:8080
 }
+{% endif %}
 
 airflow.{{ homelab_domain }} {
     reverse_proxy airflow-api-server:8080
 }
 
+{% if 'monitoring' in enabled_stacks %}
 grafana.{{ homelab_domain }} {
     reverse_proxy grafana:3000
 }
+{% endif %}
 
+{% if 'authentik' in enabled_stacks %}
 auth.{{ homelab_domain }} {
     reverse_proxy authentik-server:9000
 }
+{% endif %}
